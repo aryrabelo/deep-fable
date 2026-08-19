@@ -388,6 +388,42 @@ def _find_session_file(session_dir: Path) -> Path | None:
     return max(candidates, key=lambda p: p.stat().st_mtime)
 
 
+def _session_dispatch(path: Path) -> tuple[str | None, bool, str | None]:
+    """Read what the harness ACTUALLY dispatched, from the transcript.
+
+    An omp transcript carries two control records that settle this without
+    asking the model anything:
+
+        {"type":"model_change","model":"<id>","resolvedModelIsFallback":bool}
+        {"type":"thinking_level_change","thinkingLevel":"<level>"}
+
+    Returns (model, is_fallback, thinking_level). This exists because Round 3
+    of this repo's own work was voided by exactly the failure it detects: two
+    "cells" pinned to different models silently ran on the session default.
+    Asking the model to self-report is not a substitute — see §10 of
+    docs/BENCHMARKS.md, where the same probe reported three different wrong
+    thinking levels in three runs.
+    """
+    model: str | None = None
+    is_fallback = False
+    thinking: str | None = None
+    with path.open() as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if rec.get("type") == "model_change":
+                model = rec.get("model") or model
+                is_fallback = bool(rec.get("resolvedModelIsFallback")) or is_fallback
+            elif rec.get("type") == "thinking_level_change":
+                thinking = rec.get("thinkingLevel") or thinking
+    return model, is_fallback, thinking
+
+
 def _session_usage(path: Path) -> tuple[int, int, float]:
     """Sum usage across every assistant record in an omp session transcript.
 
@@ -460,6 +496,25 @@ def invoke_omp(
     session_file = _find_session_file(session_dir)
     if session_file is None:
         return latency, 0, 0, 0.0
+
+    # Verify the harness dispatched what this arm registered. A silent
+    # fallback to the session default is the failure that voided Round 3 of
+    # this repo's own work, and it is undetectable in the results file after
+    # the fact: the rows look fine and the arms look different when they were
+    # the same model twice. Cheap to check per invocation, so checked.
+    got_model, is_fallback, got_thinking = _session_dispatch(session_file)
+    if is_fallback or (got_model is not None and got_model != model):
+        raise RuntimeError(
+            f"dispatch mismatch for arm {arm!r}: asked for {model!r}, transcript reports "
+            f"{got_model!r} (resolvedModelIsFallback={is_fallback}). Refusing to continue — "
+            f"this is the Round 3 failure mode. Transcript: {session_file}"
+        )
+    if got_thinking is not None and got_thinking != thinking:
+        raise RuntimeError(
+            f"thinking-level mismatch for arm {arm!r}: asked for {thinking!r}, transcript "
+            f"reports {got_thinking!r}. Transcript: {session_file}"
+        )
+
     tokens_in, tokens_out, cost_usd = _session_usage(session_file)
     return latency, tokens_in, tokens_out, cost_usd
 
@@ -539,6 +594,11 @@ def filter_resume(
 def parse_args(argv=None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--exercises", type=int, default=0, metavar="N", help="Sample N exercises (0 = all)")
+    p.add_argument("--langs", default="", metavar="L1,L2",
+                   help="Comma-separated language subset (cpp, go, java, javascript, python, "
+                        "rust). Default: all. Restricting languages lowers n and therefore "
+                        "widens the equivalence margin the sweep can support — amend the "
+                        "pre-registration before using this for a real run.")
     p.add_argument("--arms", default=",".join(ARMS), help=f"Comma-separated subset of {ALL_ARMS}")
     p.add_argument("--runs", type=int, default=1, metavar="N", help="Runs per (exercise, arm) pair")
     p.add_argument("--dry-run", action="store_true", help="Resolve + assemble only; never call the agent")
@@ -642,6 +702,17 @@ def main(argv=None) -> int:
 
     repo_dir = ensure_repo(args.repo_dir)
     exercises = discover_exercises(repo_dir)
+    if args.langs:
+        wanted = [l.strip() for l in args.langs.split(",") if l.strip()]
+        unknown = [l for l in wanted if l not in LANG_DIRS]
+        if unknown:
+            print(f"error: unknown language(s) {unknown}, expected from {sorted(LANG_DIRS)}",
+                  file=sys.stderr)
+            return 2
+        exercises = [ex for ex in exercises if ex.lang in wanted]
+        print(f"--langs {','.join(wanted)}: {len(exercises)} exercise(s) after filtering.")
+    # --exercises truncates AFTER --langs, so the two compose: a language
+    # subset can still be capped for a smoke test.
     if args.exercises > 0:
         exercises = exercises[: args.exercises]
 

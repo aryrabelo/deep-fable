@@ -14,6 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from bench.aider_polyglot.run import (  # noqa: E402
+    _session_dispatch,
     emit,
     filter_resume,
     load_completed,
@@ -161,3 +162,41 @@ def test_emit_concurrent_writes_shared_filehandle(tmp_path):
     assert len(lines) == n_writers * n_per_writer
     for line in lines:
         json.loads(line)
+
+
+# --------------------------------------------------------------------------
+# _session_dispatch — the Round 3 fallback detector
+# --------------------------------------------------------------------------
+
+
+def _write_transcript(tmp_path, records) -> Path:
+    p = tmp_path / "t.jsonl"
+    p.write_text("".join(json.dumps(r) + "\n" for r in records))
+    return p
+
+
+def test_session_dispatch_reads_model_and_thinking(tmp_path):
+    p = _write_transcript(tmp_path, [
+        {"type": "session_start", "cwd": "/x"},
+        {"type": "model_change", "model": "kimi-code/k3", "resolvedModelIsFallback": False},
+        {"type": "thinking_level_change", "thinkingLevel": "max"},
+        {"type": "message", "message": {"usage": {"input": 10}}},
+    ])
+    assert _session_dispatch(p) == ("kimi-code/k3", False, "max")
+
+
+def test_session_dispatch_flags_fallback(tmp_path):
+    # The Round 3 failure: asked for one model, harness resolved another.
+    p = _write_transcript(tmp_path, [
+        {"type": "model_change", "model": "anthropic/claude-sonnet-5",
+         "resolvedModelIsFallback": True},
+        {"type": "thinking_level_change", "thinkingLevel": "medium"},
+    ])
+    model, is_fallback, thinking = _session_dispatch(p)
+    assert (model, is_fallback, thinking) == ("anthropic/claude-sonnet-5", True, "medium")
+
+
+def test_session_dispatch_tolerates_missing_records_and_bad_lines(tmp_path):
+    p = tmp_path / "t.jsonl"
+    p.write_text('{"type":"session_start"}\nnot json at all\n')
+    assert _session_dispatch(p) == (None, False, None)
