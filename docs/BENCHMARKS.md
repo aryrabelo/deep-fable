@@ -396,3 +396,43 @@ two-sided McNemar on `ds-jspace` vs `opus-med`.
 Cost, stated before authorisation: ~$2 cash for all three deepseek arms; 178 Opus and 178
 Sonnet invocations of subscription quota. Quota, not dollars, is the binding constraint, and
 it is why `runs_per_exercise` is 1 here rather than §8's 3.
+
+## 10. Q1 — the `jspace` profile does apply what it declares, and model self-reports are noise
+
+Answered 2026-08-19, three deepseek probes, roughly $0.02 total.
+
+**The configuration is applied.** `omp --profile jspace config get` reads the profile's
+*effective* settings and is free:
+
+| Query | `jspace` profile | default profile |
+|---|---|---|
+| `defaultThinkingLevel` | `max` | `auto` |
+| `modelRoles` | `{"default":"openrouter/deepseek/deepseek-v4-flash-0731"}` | — |
+
+So `profile/config.yml` is not a silent no-op on either key. It stays byte-locked; nothing was
+edited to make this pass.
+
+**But asking the model was worthless, and nearly produced a false finding.** The same probe —
+"reply with your model id and your thinking level" — answered:
+
+| Invocation | Self-reported thinking level | Actual |
+|---|---|---|
+| `--profile jspace` | `fast` | max |
+| `--profile jspace --thinking max` | `minimum` | max |
+| `--profile jspace --thinking off` | `default` | off |
+
+Three runs, three different answers, none of them the truth, and the value moved in no
+relation to the flag. The model id was reported correctly every time; the thinking level is
+simply not something the model has access to. Read as a finding, the first probe would have
+said "the profile fails to apply `max`" — the opposite of what the free config query shows.
+
+**Rule this establishes:** verify harness configuration by querying the harness, never by
+asking the model about itself. This is the same failure mode that voided Round 3 (§1), where
+pinned dispatches self-reported the wrong model. Model self-report is admissible evidence
+about nothing except the model id, and even that only corroboratively.
+
+One fragility noted while checking: the installed profile at
+`~/.omp/profiles/jspace/agent/config.yml` is a **copy**, not a symlink to `profile/config.yml`.
+The two agree today on both keys. An edit to the repo file will not reach a live profile
+without a reinstall, so any future claim about the profile must re-run the `config get` query
+rather than cite the repo file.

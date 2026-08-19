@@ -10,12 +10,12 @@ cd ~/Sites/deep-fable && omp
 # then: "read bench/RESUME.md and continue"
 ```
 
-## State at handoff (updated 2026-08-19, after steps 2–4)
+## State at handoff (updated 2026-08-19, after Q1 and steps 2–4)
 
 | | |
 |---|---|
 | Tests | 68 passing (`uv run --with pytest python -m pytest tests/ -q`) |
-| Money spent on benchmarks | $0 — every driver is still dry-run verified only |
+| Money spent on benchmarks | ~$0.02 — three Q1 config probes. No arm has been run; every driver is still dry-run verified only |
 | Anthropic quota spent | none |
 
 Built earlier: `bench/arms/` (skill conditions incl. the token-matched placebo skill),
@@ -55,31 +55,25 @@ equivalence margin and a TOST (two one-sided tests) showing the confidence inter
 inside that margin. The existing `analyze.py` only does superiority testing, so it cannot
 answer Q3 as written.
 
-## What is already known about Q1
+## Q1 — ANSWERED 2026-08-19 (~$0.02)
 
-Both keys in `profile/config.yml` are real omp keys, verified for free:
+**The profile applies both keys.** Verified for free with `omp --profile jspace config get`,
+which reads effective settings: `defaultThinkingLevel` = `max` (the default profile reads
+`auto`), `modelRoles` = `{"default":"openrouter/deepseek/deepseek-v4-flash-0731"}`.
+`profile/config.yml` stays byte-locked; nothing was edited.
 
-```yaml
-modelRoles:
-  default: openrouter/deepseek/deepseek-v4-flash-0731
-defaultThinkingLevel: max
-```
+**Asking the model was worthless and nearly produced the opposite finding.** The same probe
+self-reported `fast` under the profile, `minimum` under an explicit `--thinking max`, and
+`default` under `--thinking off` — three runs, three wrong answers, uncorrelated with the
+flag. The model id came back right every time; the thinking level is not something the model
+can see. Verify harness config by querying the harness, never by asking the model — the same
+failure mode that voided Round 3.
 
-`defaultThinkingLevel` appears at line 150 of the user's own working `~/.omp/agent/config.yml`
-(value `auto` there), so the key name is correct and the profile is not a silent no-op on that
-front. `modelRoles.default` likewise matches the live config's structure.
+Fragility noted: `~/.omp/profiles/jspace/agent/config.yml` is a **copy**, not a symlink to
+`profile/config.yml`. They agree today. A repo edit will not reach a live profile without a
+reinstall, so re-run the `config get` query rather than citing the repo file.
 
-Still unverified: that a live session started with `--profile jspace` actually *reports* that
-model and thinking level at runtime. Earlier in this work the model was confirmed to apply via
-`omp --config profile/config.yml`, but `defaultThinkingLevel: max` was never confirmed
-end-to-end. Cheapest honest check, roughly one cent:
-
-```bash
-omp --profile jspace -p "Reply with exactly two lines: your model id, and your thinking level."
-```
-
-`profile/config.yml` is byte-locked by an existing test. If the probe shows the thinking level
-is not applied, that is a real finding — do **not** edit the file to make it pass; report it.
+Full write-up: §10 of `docs/BENCHMARKS.md`.
 
 ## Design change needed for Q2 and Q3 — DONE
 
@@ -128,16 +122,15 @@ left to a reader.
 
 ## Order of work when resuming
 
-Steps 2–4 are done (see "State at handoff"). What remains, in order, all of it gated on
-authorisation because every item spends money or quota:
+Q1 and steps 2–4 are done (see "State at handoff" and the Q1 section). What remains, in order,
+both items gated on authorisation because each spends money or quota:
 
-1. **Q1 probe (~$0.01, deepseek).** `omp --profile jspace -p "Reply with exactly two lines:
-   your model id, and your thinking level."` If the thinking level does not apply, that is a
-   finding about the profile — report it, do not edit the byte-locked `profile/config.yml`.
-2. **deepseek arms** (`ds-jspace`, `ds-plain`, `ds-placebo`), 178 exercises × 1 run, ~$2 cash.
-3. **Anthropic arms** (`opus-med`, `sonnet-med`), 178 invocations each of subscription quota.
-   Q3 needs both: Sonnet brackets where deepseek+J-Space lands.
-4. Analyze with `--descriptives` and `--equivalence ds-jspace opus-med --margin 15.0 --alpha
+1. **deepseek arms** (`ds-jspace`, `ds-plain`, `ds-placebo`), 178 exercises × 1 run, ~$2 cash,
+   no Anthropic quota. Dry-run first, confirm per-arm model/thinking in the JSONL.
+2. **Anthropic arms** (`opus-med`, `sonnet-med`), 178 invocations each of subscription quota.
+   Q3 needs both: Sonnet brackets where deepseek+J-Space lands. Same 178 `task_id`s as the
+   deepseek run, or pairing breaks.
+3. Analyze with `--descriptives` and `--equivalence ds-jspace opus-med --margin 15.0 --alpha
    0.025` (and again vs `sonnet-med`), against `bench/PREREGISTRATION-MODELS.md`.
 
 ## Standing constraint
