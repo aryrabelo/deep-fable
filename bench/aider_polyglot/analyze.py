@@ -3,7 +3,8 @@
 # requires-python = ">=3.12"
 # dependencies = []
 # ///
-"""Pairwise McNemar exact test over aider_polyglot results JSONL file(s).
+"""McNemar / Wilcoxon analysis over aider_polyglot results JSONL file(s),
+mechanically enforced against the locked plan in bench/PREREGISTRATION.md.
 
 Paired design: every (task_id, arm) is compared against the SAME task_id
 under a different arm, so the right test is McNemar's exact test on the
@@ -15,39 +16,153 @@ A task is dropped from every pairing if any record for it carries a
 aren't pass/fail signal, and silently scoring a skip as a fail would bias
 every arm identically but still corrupt the discordant count.
 
-If a (task_id, arm) has more than one run, "passed" is best-of-N (True if any
-run passed), matching aider's own pass_rate_2 definition.
+Nothing about which comparison is primary, which side is being tested, the
+significance level, the discordant-pair floor, or the length-control band is
+hard-coded here: all of it is read from the single fenced ```json block in
+bench/PREREGISTRATION.md (override with --prereg) on every run. If that file
+is missing or the block doesn't parse, this script refuses to print any
+verdict at all — an unregistered analysis is exactly what pre-registration
+exists to prevent, and a script that "helpfully" falls back to hard-coded
+defaults would defeat the whole point.
+
+Two pre-specified analyses run over the same multi-run data (plan's
+`runs_per_exercise`):
+  (a) PRIMARY — one binary pass/fail per (task, arm), taken as the strict
+      majority vote across that exercise's runs, fed to an exact McNemar
+      test (one- or two-sided per the plan).
+  (b) graded SECONDARY — the per-exercise pass *proportion* across runs
+      (0, 1/3, 2/3, 1 at runs_per_exercise=3), compared with a Wilcoxon
+      signed-rank test. This is always descriptive, never inferential, even
+      when run on the primary arm pair — only one test in the whole report
+      carries a significance verdict, which is what lets the primary skip a
+      multiplicity correction.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import itertools
 import json
 import math
+import re
 import statistics
 import sys
 from collections import defaultdict
 from pathlib import Path
 
-MIN_DISCORDANT = 10
+HERE = Path(__file__).resolve().parent
+REPO_ROOT = HERE.parent.parent
+DEFAULT_PREREG_PATH = REPO_ROOT / "bench" / "PREREGISTRATION.md"
 
-# The placebo is length-matched to the ~60-token always-on snippet, not to
-# the skill it routes to (SKILL.md alone is 3,834 tokens; the full payload
-# with modules + references is up to 42,675 — see profile/APPEND_SYSTEM.md
-# and .omp/skills/j-space/). So mean tokens_in is expected to diverge once
-# jspace actually reads skill://j-space: reading nothing (ratio ~1x) means
-# the instruction never fired and jspace is behaviorally indistinguishable
-# from placebo; reading the *entire* skill on every task (which a working
-# dynamic-routing skill should never do — it should route to the one
-# relevant module) would swamp a typical multi-turn exercise session with
-# raw token volume rather than targeted instructions. 4x is chosen as the
-# ceiling because reading SKILL.md plus one module (the intended routed
-# behavior) is a small fraction of a real session's token count, while
-# reading the full 42,675-token payload on every task is not — it stops
-# being "the same idea, shorter vs. longer" and starts being "meaningfully
-# more compute," which is exactly the confound placebo exists to rule out.
-LENGTH_RATIO_MIN = 1.0
-LENGTH_RATIO_MAX = 4.0
+# Below this many non-zero paired differences, the normal approximation to
+# the Wilcoxon signed-rank null distribution is not considered reliable
+# (commonly-cited floor; see e.g. Conover, "Practical Nonparametric
+# Statistics", 3rd ed., ch. 5.7). This is a property of the approximation
+# itself, not a plan decision, so it isn't read from PREREGISTRATION.md.
+WILCOXON_MIN_N = 10
+
+_JSON_BLOCK_RE = re.compile(r"```json\s*\n(.*?)\n```", re.DOTALL)
+_ALT_RE = re.compile(r"^\s*(\S+)\s*>\s*(\S+)\s*$")
+
+_REQUIRED_PLAN_KEYS: dict[str, type | tuple[type, ...]] = {
+    "primary_comparison": list,
+    "sided": int,
+    "alternative": str,
+    "alpha": (int, float),
+    "power": (int, float),
+    "expected_discordant_rate": (int, float),
+    "usable_exercises": int,
+    "runs_per_exercise": int,
+    "mde_pp": (int, float),
+    "min_discordant_pairs": int,
+    "length_control_band": list,
+    "secondary_comparisons": list,
+    "multiplicity": str,
+}
+
+
+class PreregError(Exception):
+    """The pre-registration plan is missing, unreadable, or unparseable.
+
+    Every caller of load_prereg()/parse_alternative() MUST treat this as
+    "refuse to print any verdict", not "fall back to a default" — a default
+    is exactly the hard-coded, trust-me analysis this file exists to avoid.
+    """
+
+
+def load_prereg(path: Path) -> tuple[dict, str, str]:
+    """Read, hash, and validate the locked plan. Returns (plan, sha256_hex,
+    raw_text). Raises PreregError on any problem."""
+    if not path.exists():
+        raise PreregError(f"no such file: {path}")
+    raw_bytes = path.read_bytes()
+    sha256_hex = hashlib.sha256(raw_bytes).hexdigest()
+    try:
+        raw_text = raw_bytes.decode("utf-8")
+    except UnicodeDecodeError as e:
+        raise PreregError(f"{path} is not valid utf-8: {e}") from e
+
+    blocks = _JSON_BLOCK_RE.findall(raw_text)
+    if len(blocks) == 0:
+        raise PreregError(f"no fenced ```json block found in {path}")
+    if len(blocks) > 1:
+        raise PreregError(
+            f"expected exactly one fenced ```json block in {path} (the locked "
+            f"machine-readable plan), found {len(blocks)} — ambiguous"
+        )
+    try:
+        plan = json.loads(blocks[0])
+    except json.JSONDecodeError as e:
+        raise PreregError(f"malformed json in {path}'s fenced block: {e}") from e
+    if not isinstance(plan, dict):
+        raise PreregError(f"{path}'s json block must be an object, got {type(plan).__name__}")
+
+    for key, types in _REQUIRED_PLAN_KEYS.items():
+        if key not in plan:
+            raise PreregError(f"{path} json block missing required key {key!r}")
+        if not isinstance(plan[key], types) or isinstance(plan[key], bool):
+            raise PreregError(
+                f"{path} json block key {key!r} has wrong type: expected {types}, "
+                f"got {type(plan[key]).__name__}"
+            )
+    if plan["sided"] not in (1, 2):
+        raise PreregError(f"{path}: sided must be 1 or 2, got {plan['sided']!r}")
+    if len(plan["primary_comparison"]) != 2:
+        raise PreregError(f"{path}: primary_comparison must name exactly 2 arms")
+    if len(plan["length_control_band"]) != 2:
+        raise PreregError(f"{path}: length_control_band must have exactly 2 numbers")
+    for pair in plan["secondary_comparisons"]:
+        if not (isinstance(pair, list) and len(pair) == 2):
+            raise PreregError(f"{path}: each secondary_comparisons entry must name exactly 2 arms")
+
+    return plan, sha256_hex, raw_text
+
+
+def parse_alternative(plan: dict) -> tuple[str, str]:
+    """Return (favored_arm, other_arm) from plan['alternative'], e.g.
+    'jspace > placebo' -> ('jspace', 'placebo'). The two arms named must be
+    exactly the two arms in primary_comparison — a plan that tests one pair
+    but declares a direction over a different pair is internally
+    inconsistent and refused, not silently reinterpreted."""
+    m = _ALT_RE.match(plan["alternative"])
+    if not m:
+        raise PreregError(f"cannot parse alternative {plan['alternative']!r}; expected '<arm> > <arm>'")
+    favored, other = m.group(1), m.group(2)
+    if {favored, other} != set(plan["primary_comparison"]):
+        raise PreregError(
+            f"alternative {plan['alternative']!r} does not name the same two arms as "
+            f"primary_comparison {plan['primary_comparison']!r}"
+        )
+    return favored, other
+
+
+def print_header(plan: dict, sha256_hex: str, path: Path) -> None:
+    arm_a, arm_b = plan["primary_comparison"]
+    sidedness = f"one-sided ({plan['alternative']})" if plan["sided"] == 1 else "two-sided"
+    print(f"Pre-registration: {path} (sha256 {sha256_hex})")
+    print(f"  primary comparison: {arm_a} vs {arm_b}   sidedness: {sidedness}")
+    print(f"  declared MDE: {plan['mde_pp']}pp at alpha={plan['alpha']}, power={plan['power']}")
+    print(f"  multiplicity: {plan['multiplicity']}")
 
 
 def load_records(paths: list[Path]):
@@ -59,8 +174,11 @@ def load_records(paths: list[Path]):
                     yield json.loads(line)
 
 
-def aggregate(records) -> dict[str, dict[str, bool]]:
-    passed: dict[str, dict[str, bool]] = defaultdict(dict)
+def aggregate_runs(records) -> dict[str, dict[str, dict[int, bool]]]:
+    """task_id -> arm -> {run_idx: passed}. A task carrying any skip/dry-run
+    record (any arm, any run) is dropped entirely — a skip isn't pass/fail
+    signal, and scoring it either way would corrupt the discordant count."""
+    runs: dict[str, dict[str, dict[int, bool]]] = defaultdict(lambda: defaultdict(dict))
     skip_or_dry: set[str] = set()
     for r in records:
         if r.get("benchmark") != "aider_polyglot":
@@ -70,13 +188,41 @@ def aggregate(records) -> dict[str, dict[str, bool]]:
         if note.startswith("skip:") or note == "dry-run":
             skip_or_dry.add(task_id)
             continue
-        passed[task_id][arm] = passed[task_id].get(arm, False) or bool(r["passed"])
+        run_idx = int(r.get("run_idx", 1))
+        runs[task_id][arm][run_idx] = bool(r["passed"])
     for task_id in skip_or_dry:
-        passed.pop(task_id, None)
-    return passed
+        runs.pop(task_id, None)
+    return runs
 
 
-def mcnemar_exact_p(b: int, c: int) -> float:
+def majority_vote(run_results: dict[int, bool]) -> bool:
+    """Strict majority of the k runs recorded for one (task_id, arm). A tie
+    (exactly half pass — impossible at the plan's odd runs_per_exercise=3,
+    but reachable with partial data) counts as fail: conservative, and
+    documented here rather than silently picked."""
+    n = len(run_results)
+    if n == 0:
+        return False
+    k = sum(run_results.values())
+    return 2 * k > n
+
+
+def pass_proportion(run_results: dict[int, bool]) -> float:
+    n = len(run_results)
+    if n == 0:
+        return 0.0
+    return sum(run_results.values()) / n
+
+
+def majority_table(runs: dict[str, dict[str, dict[int, bool]]]) -> dict[str, dict[str, bool]]:
+    return {tid: {arm: majority_vote(rr) for arm, rr in arms.items()} for tid, arms in runs.items()}
+
+
+def proportion_table(runs: dict[str, dict[str, dict[int, bool]]]) -> dict[str, dict[str, float]]:
+    return {tid: {arm: pass_proportion(rr) for arm, rr in arms.items()} for tid, arms in runs.items()}
+
+
+def mcnemar_two_sided_p(b: int, c: int) -> float:
     """Two-sided exact McNemar test: binomial(n=b+c, p=0.5) tail doubled."""
     n = b + c
     if n == 0:
@@ -84,6 +230,25 @@ def mcnemar_exact_p(b: int, c: int) -> float:
     k = min(b, c)
     tail = sum(math.comb(n, i) for i in range(k + 1))
     return min(1.0, 2 * tail * (0.5**n))
+
+
+def mcnemar_one_sided_p(favor: int, against: int) -> float:
+    """One-sided exact McNemar test for the pre-registered directional claim
+    "favor-arm > against-arm". Caller MUST only invoke this after confirming
+    favor > against (the observed effect runs the predicted way) — see
+    report_primary_verdict()'s NO CLAIM branch for what happens otherwise.
+
+    Formula: p = P(X <= against), X ~ Binomial(n=favor+against, p=0.5) — the
+    probability, under the null of no true difference, of an imbalance at
+    least this extreme *in the predicted direction only*. This is exactly
+    half of mcnemar_two_sided_p(favor, against) whenever favor > against,
+    because the two-sided test's tail is symmetric and this one spends all
+    of it on the single predicted side.
+    """
+    assert favor > against, "one-sided p only defined once the direction is confirmed"
+    n = favor + against
+    tail = sum(math.comb(n, i) for i in range(against + 1))
+    return min(1.0, tail * (0.5**n))
 
 
 def pair_table(passed: dict[str, dict[str, bool]], arm1: str, arm2: str) -> tuple[int, int, int, int]:
@@ -116,12 +281,16 @@ def tokens_in_by_arm(records) -> dict[str, list[int]]:
     return by_arm
 
 
-def print_length_control(by_arm: dict[str, list[int]], arms: list[str]) -> bool:
-    """Print per-arm tokens_in stats and gate the jspace-vs-placebo verdict.
+def print_length_control(by_arm: dict[str, list[int]], arms: list[str], plan: dict) -> bool:
+    """Print per-arm tokens_in stats and gate the PRIMARY verdict.
 
-    Returns True iff a jspace-vs-placebo verdict may be printed (either the
-    pair isn't present, or the length control held).
+    Returns True iff the primary verdict may be printed (either the primary
+    pair isn't present in this data, or the length control held). Band and
+    the arm pair it gates come from the plan, not a hard-coded pair name.
     """
+    ratio_min, ratio_max = plan["length_control_band"]
+    arm_a, arm_b = plan["primary_comparison"]
+
     print("\nLength control (tokens_in per real invocation, skip/dry-run excluded):")
     for arm in sorted(arms):
         vals = by_arm.get(arm, [])
@@ -133,73 +302,221 @@ def print_length_control(by_arm: dict[str, list[int]], arms: list[str]) -> bool:
             f"  median={statistics.median(vals):.0f}"
         )
 
-    if "jspace" not in arms or "placebo" not in arms:
+    if arm_a not in arms or arm_b not in arms:
         return True
 
-    jvals, pvals = by_arm.get("jspace", []), by_arm.get("placebo", [])
-    if not jvals or not pvals or all(v == 0 for v in jvals + pvals):
+    a_vals, b_vals = by_arm.get(arm_a, []), by_arm.get(arm_b, [])
+    if not a_vals or not b_vals or all(v == 0 for v in a_vals + b_vals):
         print(
-            "\n  length control UNVERIFIED — tokens_in not populated for jspace/placebo "
-            "(dry-run data, or the harness did not report usage). The jspace-vs-placebo "
-            "verdict below is suppressed: a gate that passes on missing data is worse than "
-            "no gate."
+            f"\n  length control UNVERIFIED — tokens_in not populated for {arm_a}/{arm_b} "
+            "(dry-run data, or the harness did not report usage). The PRIMARY verdict below "
+            "is suppressed: a gate that passes on missing data is worse than no gate."
         )
         return False
 
-    j_mean, p_mean = statistics.mean(jvals), statistics.mean(pvals)
-    if p_mean == 0:
-        print("\n  length control UNVERIFIED — placebo mean tokens_in is 0, ratio undefined.")
+    a_mean, b_mean = statistics.mean(a_vals), statistics.mean(b_vals)
+    if b_mean == 0:
+        print(f"\n  length control UNVERIFIED — {arm_b} mean tokens_in is 0, ratio undefined.")
         return False
 
-    ratio = j_mean / p_mean
+    ratio = a_mean / b_mean
     print(
-        f"\n  jspace/placebo mean tokens_in ratio: {ratio:.2f}x "
-        f"(defensible band: {LENGTH_RATIO_MIN:.1f}x-{LENGTH_RATIO_MAX:.1f}x)"
+        f"\n  {arm_a}/{arm_b} mean tokens_in ratio: {ratio:.2f}x "
+        f"(pre-registered band: {ratio_min:.1f}x-{ratio_max:.1f}x)"
     )
-    if not (LENGTH_RATIO_MIN <= ratio <= LENGTH_RATIO_MAX):
+    if not (ratio_min <= ratio <= ratio_max):
         print(
-            "  LENGTH CONTROL FAILED — ratio outside the defensible band. The jspace-vs-placebo "
-            "verdict below is suppressed: at this gap, a pass-rate delta could just mean jspace "
-            "read more tokens, not that its specific instructions helped."
+            "  LENGTH CONTROL FAILED — ratio outside the pre-registered band. The PRIMARY "
+            f"verdict below is suppressed: at this gap, a pass-rate delta could just mean "
+            f"{arm_a} read more tokens, not that its specific instructions helped."
         )
         return False
     return True
 
 
-def report(passed: dict[str, dict[str, bool]], arms: list[str], gate_ok: bool = True) -> None:
+def normal_cdf(z: float) -> float:
+    return 0.5 * (1.0 + math.erf(z / math.sqrt(2.0)))
+
+
+def wilcoxon_signed_rank(diffs: list[float]) -> tuple[float, float, int]:
+    """Wilcoxon signed-rank test, normal approximation with tie correction
+    and continuity correction (stdlib only — no scipy).
+
+    This is the graded companion to the binary majority-vote/McNemar
+    primary: majority vote collapses each exercise's 3 runs to one bit and
+    throws away *how* discordant the runs were (2/3 vs 3/3 both become
+    "pass"). The signed-rank test instead ranks the *magnitude* of each
+    exercise's proportion gap between arms, so an exercise where one arm
+    clearly dominates (diff = 1) contributes more to the statistic than one
+    where the arms barely differ (diff = 1/3) — using information the
+    binary test discards, which is why the graded version has more power
+    for a fixed set of exercises.
+
+    Algorithm: drop zero differences (no signed information), rank |d_i|
+    ascending with average ranks on ties, split into W+ (positive d_i) and
+    W- (negative d_i):
+      mu    = n(n+1)/4
+      sigma = sqrt( n(n+1)(2n+1)/24 - sum(t_j^3 - t_j)/48 )   # t_j = tie-group sizes
+      z     = (W+ - mu - 0.5*sign(W+ - mu)) / sigma            # continuity correction
+
+    Returns (z, w_plus, n) where n counts only the non-zero differences.
+    Validity floor: WILCOXON_MIN_N (see module docstring) — caller must
+    check n before trusting z.
+    """
+    nz = [d for d in diffs if d != 0]
+    n = len(nz)
+    if n == 0:
+        return 0.0, 0.0, 0
+
+    order = sorted(range(n), key=lambda i: abs(nz[i]))
+    ranks = [0.0] * n
+    tie_correction = 0.0
+    i = 0
+    while i < n:
+        j = i
+        while j + 1 < n and abs(nz[order[j + 1]]) == abs(nz[order[i]]):
+            j += 1
+        avg_rank = (i + 1 + j + 1) / 2.0
+        t = j - i + 1
+        tie_correction += t**3 - t
+        for m in range(i, j + 1):
+            ranks[order[m]] = avg_rank
+        i = j + 1
+
+    w_plus = sum(ranks[k] for k in range(n) if nz[k] > 0)
+    mu = n * (n + 1) / 4.0
+    sigma2 = n * (n + 1) * (2 * n + 1) / 24.0 - tie_correction / 48.0
+    if sigma2 <= 0:
+        return 0.0, w_plus, n
+    sigma = math.sqrt(sigma2)
+    cc = 0.5 if w_plus > mu else (-0.5 if w_plus < mu else 0.0)
+    z = (w_plus - mu - cc) / sigma
+    return z, w_plus, n
+
+
+def report_graded_secondary(arm1: str, arm2: str, proportions: dict[str, dict[str, float]]) -> None:
+    diffs = [arms[arm1] - arms[arm2] for arms in proportions.values() if arm1 in arms and arm2 in arms]
+    n_total = len(diffs)
+    mean_diff = statistics.mean(diffs) if diffs else 0.0
+    z, _w_plus, n_nonzero = wilcoxon_signed_rank(diffs)
+    print(
+        "  graded (per-run pass proportion, Wilcoxon signed-rank, pre-specified secondary — "
+        "descriptive, no inferential claim):"
+    )
+    print(
+        f"    n paired tasks: {n_total}   non-zero differences: {n_nonzero}   "
+        f"mean proportion diff ({arm1}-{arm2}): {mean_diff:+.3f}"
+    )
+    if n_nonzero < WILCOXON_MIN_N:
+        print(
+            f"    normal approximation UNRELIABLE below n={WILCOXON_MIN_N} non-zero pairs "
+            f"(have {n_nonzero}) — no z/p printed."
+        )
+        return
+    p_two_sided = min(1.0, 2 * (1 - normal_cdf(abs(z))))
+    print(f"    z = {z:.3f}   two-sided p (descriptive) = {p_two_sided:.4f}")
+
+
+def report_primary_verdict(
+    plan: dict, favored: str, other: str, arm1: str, arm2: str, only1: int, only2: int, discordant: int, gate_ok: bool
+) -> None:
+    if not gate_ok:
+        print("  PRIMARY verdict suppressed: length control gate failed above (see Length control section).")
+        return
+    if discordant < plan["min_discordant_pairs"]:
+        print(
+            f"  UNDERPOWERED: {discordant} discordant pairs is below the pre-registered minimum "
+            f"of {plan['min_discordant_pairs']}. No verdict — collect more paired tasks before "
+            "trusting any p-value here."
+        )
+        return
+
+    if plan["sided"] == 2:
+        p = mcnemar_two_sided_p(only1, only2)
+        direction = "neither (tied)" if only1 == only2 else (arm1 if only1 > only2 else arm2)
+        verdict = f"SIGNIFICANT (p < {plan['alpha']})" if p < plan["alpha"] else f"not significant (p >= {plan['alpha']})"
+        print(f"  McNemar exact two-sided p-value: {p:.4f}   favors: {direction}")
+        print(f"  PRIMARY verdict: {verdict}")
+        return
+
+    # sided == 1: favor/against are oriented to the plan's declared direction,
+    # not to arm1/arm2's alphabetical order.
+    favor_count, against_count = (only1, only2) if arm1 == favored else (only2, only1)
+    if favor_count == against_count:
+        print(f"  observed: tied ({favor_count} vs {against_count} discordant pairs)")
+        print("  PRIMARY verdict: NO CLAIM (effect opposes the pre-registered direction)")
+        return
+    if favor_count < against_count:
+        print(f"  observed direction: {other} ({against_count} vs {favor_count} discordant pairs) — opposes the pre-registered direction ({favored} > {other})")
+        print("  PRIMARY verdict: NO CLAIM (effect opposes the pre-registered direction)")
+        return
+
+    p = mcnemar_one_sided_p(favor_count, against_count)
+    verdict = f"SIGNIFICANT (p < {plan['alpha']})" if p < plan["alpha"] else f"not significant (p >= {plan['alpha']})"
+    print(f"  McNemar exact one-sided p-value ({favored} > {other}): {p:.4f}")
+    print(f"  PRIMARY verdict: {verdict}")
+
+
+def report(
+    plan: dict,
+    favored: str,
+    other: str,
+    runs: dict[str, dict[str, dict[int, bool]]],
+    arms: list[str],
+    gate_ok: bool,
+) -> None:
+    majority = majority_table(runs)
+    proportions = proportion_table(runs)
+    primary_pair = frozenset(plan["primary_comparison"])
+    secondary_pairs = {frozenset(p) for p in plan["secondary_comparisons"]}
+
+    if primary_pair - set(arms):
+        print(f"\nNOTE: primary comparison {sorted(primary_pair)} not fully present in this data "
+              f"(arms seen: {arms}) — no PRIMARY verdict will be printed this run.")
+
     for arm1, arm2 in itertools.combinations(sorted(arms), 2):
-        both, only1, only2, neither = pair_table(passed, arm1, arm2)
+        pair = frozenset((arm1, arm2))
+        both, only1, only2, neither = pair_table(majority, arm1, arm2)
         discordant = only1 + only2
         n_pairs = both + only1 + only2 + neither
-        print(f"\n{arm1} vs {arm2}  (n paired tasks = {n_pairs})")
+        print(f"\n{arm1} vs {arm2}  (n paired tasks = {n_pairs}, majority-vote binary outcome)")
         print(f"  both pass: {both}    both fail: {neither}")
         print(f"  {arm1} only pass: {only1}    {arm2} only pass: {only2}")
         print(f"  discordant pairs: {discordant}")
-        if {arm1, arm2} == {"jspace", "placebo"} and not gate_ok:
-            print("  verdict suppressed: length control gate failed above (see Length control section).")
-            continue
-        if discordant < MIN_DISCORDANT:
-            print(
-                f"  UNDERPOWERED: {discordant} discordant pairs is below the minimum of "
-                f"{MIN_DISCORDANT}. No verdict — collect more paired tasks before trusting "
-                "any p-value here."
-            )
-            continue
-        p = mcnemar_exact_p(only1, only2)
-        if only1 == only2:
-            direction = "neither (tied)"
+
+        if pair == primary_pair:
+            report_primary_verdict(plan, favored, other, arm1, arm2, only1, only2, discordant, gate_ok)
+        elif pair in secondary_pairs:
+            print("  descriptive, no inferential claim (secondary comparison per pre-registration)")
         else:
-            direction = arm1 if only1 > only2 else arm2
-        verdict = "SIGNIFICANT (p < 0.05)" if p < 0.05 else "not significant (p >= 0.05)"
-        print(f"  McNemar exact p-value: {p:.4f}   favors: {direction}")
-        print(f"  verdict: {verdict}")
+            print("  UNREGISTERED comparison — not named in the pre-registration; descriptive only, no inferential claim")
+
+        report_graded_secondary(arm1, arm2, proportions)
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("paths", nargs="+", type=Path, help="One or more results JSONL files")
     ap.add_argument("--arms", default=None, help="Comma-separated arm subset (default: all seen)")
+    ap.add_argument(
+        "--prereg", type=Path, default=DEFAULT_PREREG_PATH,
+        help="Path to the locked pre-registration plan (default: bench/PREREGISTRATION.md)",
+    )
     args = ap.parse_args(argv)
+
+    try:
+        plan, sha256_hex, _raw = load_prereg(args.prereg)
+        favored, other = parse_alternative(plan)
+    except PreregError as e:
+        print(f"REFUSING TO ANALYZE: {e}", file=sys.stderr)
+        print(
+            "analyze.py enforces the locked plan in bench/PREREGISTRATION.md mechanically; "
+            "an unregistered or unparseable plan means no verdict can be trusted.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print_header(plan, sha256_hex, args.prereg)
 
     for p in args.paths:
         if not p.exists():
@@ -211,21 +528,21 @@ def main(argv=None) -> int:
         print("no aider_polyglot records found", file=sys.stderr)
         return 1
 
-    passed = aggregate(records)
-    seen_arms = {a for m in passed.values() for a in m}
+    runs = aggregate_runs(records)
+    seen_arms = {a for m in runs.values() for a in m}
     arms = args.arms.split(",") if args.arms else sorted(seen_arms)
     if len(arms) < 2:
         print("need at least 2 arms present in the data", file=sys.stderr)
         return 1
 
     print(
-        f"Loaded {len(records)} record(s) from {len(args.paths)} file(s); "
-        f"{len(passed)} task(s) with usable (non-skipped, non-dry-run) pass/fail data."
+        f"\nLoaded {len(records)} record(s) from {len(args.paths)} file(s); "
+        f"{len(runs)} task(s) with usable (non-skipped, non-dry-run) pass/fail data."
     )
 
     by_arm_tokens = tokens_in_by_arm(records)
-    gate_ok = print_length_control(by_arm_tokens, arms)
-    report(passed, arms, gate_ok=gate_ok)
+    gate_ok = print_length_control(by_arm_tokens, arms, plan)
+    report(plan, favored, other, runs, arms, gate_ok)
     return 0
 
 

@@ -324,3 +324,34 @@ beats model B," "the placebo control failed"), it must satisfy every line below:
 - [ ] **Publish mean input tokens per arm.** Report mean `tokens_in` for `jspace`, `none`,
       and `placebo` alongside every pass-rate claim, so a reader can see whether the length
       control (§5, "Matching the right length") actually held for that run.
+- [ ] **Cite the pre-registration hash.** Any claim about the `jspace`-vs-`placebo`
+      comparison must quote the hash of the locked plan that `analyze.py` prints alongside
+      its verdict, so a reader can confirm the plan being cited is the one that was written
+      down before the sweep ran, not a later edit.
+
+## 8. Pre-registration: the locked analysis plan for the 178-exercise sweep
+
+The Aider polyglot sweep runs on 178 usable exercises (Java toolchain unavailable on this
+machine — see `bench/aider_polyglot/README.md`) instead of the full 225. `bench/PREREGISTRATION.md`
+is the locked plan that makes 178 exercises statistically equivalent to 225 run two-sided,
+written and committed before any sweep data exists. The full justification, power arithmetic,
+stopping rule, and falsification criteria live there; this section is the pointer and a short
+summary.
+
+| Field | Locked value |
+|---|---|
+| Primary comparison | `jspace` vs. `placebo` (the comparison that isolates skill content from prompt length) |
+| Sidedness | One-sided, `jspace > placebo` — cannot claim harm |
+| α / power | 0.05 / 0.80 |
+| Expected discordant rate | 0.25 |
+| Usable exercises | 178 |
+| Runs per exercise | 3 |
+| Minimum detectable effect | 9.3pp — equal to 225 exercises run two-sided |
+| Minimum discordant pairs | 10 |
+| Length-control band | 1.0x–4.0x mean `tokens_in` ratio |
+| Secondary comparisons | `jspace` vs. `none`, `placebo` vs. `none` — descriptive only, no inferential claim |
+| Multiplicity correction | None on the primary; the one-primary constraint is what makes that legitimate |
+
+See `bench/PREREGISTRATION.md` for the full prose justification of each decision, the four-row
+power table this summary condenses, the no-peeking stopping rule, and what outcome would count
+as a falsifying (bounded) null result.
