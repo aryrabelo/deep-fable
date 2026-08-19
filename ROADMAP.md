@@ -26,6 +26,25 @@ Adapter contract, identical for all five: destination overridable by env var
 always-on instruction is **printed for the user to paste — never written**. No adapter
 touches a user config file or a model setting.
 
+## Efficacy benchmark — harness built, runs not yet paid for
+
+`bench/` exists; no sweep has been run. [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) holds the
+accounting and the power arithmetic. State of play:
+
+| Piece | Status |
+|---|---|
+| Three arms (`jspace` / `none` / `placebo`) | ✅ `bench/arms/`, placebo token-matched per file, 13 pairs, worst delta 0.43% |
+| Aider polyglot driver + McNemar analysis | ✅ `bench/aider_polyglot/`, dry-run verified, analysis checked against hand-computed fixtures |
+| Terminal-Bench omp adapter | ✅ `bench/terminal_bench/`, wired through `tb run --agent-import-path`, dry-run verified |
+| A real sweep | ❌ not run — ~$2 estimated per full polyglot sweep (534 invocations), estimate itself uncalibrated |
+| Java toolchain | ❌ missing here, so 178/225 exercises are usable, short of the ~200 a 10pp effect needs. macOS ships a `/usr/bin/java` stub that resolves under `which` but exits 1; the driver probes by invoking, and SKIPs rather than scoring a fail. `brew install openjdk` closes the gap |
+| `--session-dir` path prefix | ⚠️ [INFERENCE] — usage capture globs for `sessions/<slug>/*.jsonl` at any depth because the exact prefix could not be confirmed without a paid call. If a sweep returns `tokens_in: 0` throughout, this hedge is what failed, and the length-control gate reports UNVERIFIED rather than passing silently |
+
+Order of operations when a sweep is authorised: install a JDK to reach 225 exercises, run the
+12-task Terminal-Bench subset once per arm to calibrate real cost against the estimate, then
+run the full polyglot sweep. Publish the raw JSONL, the discordant-pair count, and mean
+`tokens_in` per arm, or the result does not count under §7 of `docs/BENCHMARKS.md`.
+
 ## Verified items (closed 2026-08-19)
 
 All four were answered by Round 4 of the model benchmark

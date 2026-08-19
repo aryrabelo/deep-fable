@@ -131,6 +131,25 @@ In-repo the skill lives once at `.omp/skills/j-space`; `.agents/skills/j-space` 
 to it, and that single path is read natively by OMP, Codex CLI, Cursor, and Gemini CLI. Full
 support matrix and the verified sources behind each install path: [ROADMAP.md](ROADMAP.md).
 
+## Does the skill actually work?
+
+Unknown, and this repo says so out loud. Nothing measured here yet shows that J-Space changes
+coding outcomes: Round 1 was a ceiling effect, Round 3's verdict is unreproduced, Round 4
+measured adapter integration. Upstream's claimed +7 to +16pp gains ship with no harness, no
+seeds, no run counts and no confidence intervals.
+
+[`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) is the honest accounting, and `bench/` is the
+harness built to settle it:
+
+| | what it is | scope |
+|---|---|---|
+| [`bench/aider_polyglot/`](bench/aider_polyglot/) | 225-exercise polyglot set, 3 arms, McNemar exact test | the efficacy vehicle — ~200 paired tasks are what a 10pp effect needs |
+| [`bench/terminal_bench/`](bench/terminal_bench/) | omp adapter for Terminal-Bench, 12-task subset | harness validation and cost calibration only — 12 tasks detect ~36pp at best |
+| [`bench/arms/`](bench/arms/) | `jspace` / `none` / `placebo` | the placebo is token-matched per file against every j-space file, worst delta 0.43% |
+
+Three arms, not two: filler tokens alone can raise scores ([Pfau et al. 2024](https://arxiv.org/abs/2404.15758)),
+so without a length-matched control a win cannot be told apart from "a longer prompt helps".
+
 ## Why DeepSeek
 
 Two rounds of fair-comparison benchmarking (`model-eval/`) before picking a default.
@@ -138,6 +157,13 @@ Two rounds of fair-comparison benchmarking (`model-eval/`) before picking a defa
 **Round 1 — 5 models × effort levels × 6 real maintenance tasks × 3 runs, deterministic held-out acceptance, no LLM judge.** 234/234 PASS. Every model, every effort level, every run — a ceiling. Effort level produced no measurable difference at this task size. Verdict: choose on cost, not correctness. Full report: [`model-eval/REPORT.md`](model-eval/REPORT.md).
 
 **Round 3 — opus:medium vs deepseek:max, a five-stage creative landing-page build, blind human A/B.** Both cells 12/12 on the objective checker, clean render, zero console errors. The human judge broke the tie narrowly toward opus ("quase um empate mas a X tá melhor") — while deepseek finished ~3 minutes faster at a cost of cents. Full report: [`model-eval/round3/REPORT.md`](model-eval/round3/REPORT.md).
+
+> **This verdict is unreproduced and should not be cited.** Round 3 pinned models with
+> `agent(prompt, { model })` in the JS eval kernel, and Round 4 found that option is silently
+> ignored — a bogus model id raised no error, and both supposedly-pinned cells self-reported
+> `claude-sonnet-5`. Both arms were most likely the same model running the same prompt twice.
+> Model pinning now goes through separate `omp` processes with `--model`, which fails loudly on
+> a bad id. See [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) §1.
 
 | | `claude-opus-5:medium` | `deepseek-v4-flash-0731:max` |
 |---|---|---|
@@ -175,7 +201,13 @@ deep-fable/
 │   ├── round3/
 │   └── round4/
 ├── jspace-eval/             # J-Space-specific eval tasks and verifier
-├── tests/                   # pytest for install.sh / adapters / repo hygiene
+├── bench/                   # three-arm efficacy harness (see docs/BENCHMARKS.md)
+│   ├── arms/                # jspace / none / placebo, incl. the token-matched placebo skill
+│   ├── aider_polyglot/      # 225 exercises, McNemar exact test, length-control gate
+│   ├── terminal_bench/      # omp adapter + 12-task calibration subset
+│   └── results/             # raw results JSONL, committed on purpose
+├── tests/                   # pytest for install.sh / adapters / repo hygiene / arms
+├── docs/BENCHMARKS.md       # what is measured, what is not, and the power arithmetic
 └── docs/images/             # benchmark screenshots
 ```
 
