@@ -48,6 +48,7 @@ import re
 import statistics
 import sys
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -338,6 +339,22 @@ def normal_cdf(z: float) -> float:
     return 0.5 * (1.0 + math.erf(z / math.sqrt(2.0)))
 
 
+def normal_ppf(p: float) -> float:
+    """Inverse standard normal CDF (probit), via bisection over normal_cdf
+    (stdlib only -- no scipy). Accurate to ~1e-12, plenty for a z-score used
+    in a CI half-width."""
+    if not 0.0 < p < 1.0:
+        raise ValueError(f"p must be in (0, 1), got {p!r}")
+    lo, hi = -10.0, 10.0
+    for _ in range(200):
+        mid = (lo + hi) / 2.0
+        if normal_cdf(mid) < p:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2.0
+
+
 def wilcoxon_signed_rank(diffs: list[float]) -> tuple[float, float, int]:
     """Wilcoxon signed-rank test, normal approximation with tie correction
     and continuity correction (stdlib only — no scipy).
@@ -494,6 +511,218 @@ def report(
         report_graded_secondary(arm1, arm2, proportions)
 
 
+def wilson_ci(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """Wilson score interval for a binomial proportion k/n. Unlike the naive
+    (Wald) normal approximation, this is well-behaved at the boundaries:
+    exactly 0.0 at k=0 and exactly 1.0 at k=n, never negative or above 1."""
+    if n <= 0:
+        return 0.0, 1.0
+    z2 = z * z
+    p_hat = k / n
+    denom = 1.0 + z2 / n
+    center = p_hat + z2 / (2 * n)
+    adj = z * math.sqrt(p_hat * (1 - p_hat) / n + z2 / (4 * n * n))
+    lo, hi = (center - adj) / denom, (center + adj) / denom
+    return max(0.0, lo), min(1.0, hi)
+
+
+def paired_diff_ci(b: int, c: int, n: int, z: float) -> tuple[float, float]:
+    """CI for the paired difference in pass proportions (b-c)/n, using the
+    standard McNemar-style SE sqrt(b + c - (b-c)**2/n) / n. b, c are
+    discordant counts; n is the total number of paired tasks."""
+    diff = (b - c) / n
+    se = math.sqrt(max(0.0, b + c - (b - c) ** 2 / n)) / n
+    return diff - z * se, diff + z * se
+
+
+@dataclass(frozen=True)
+class TOSTResult:
+    p_lower: float  # one-sided p, H0: true diff <= -margin
+    p_upper: float  # one-sided p, H0: true diff >= +margin
+    p: float        # max(p_lower, p_upper) -- the TOST p-value
+    ci: tuple[float, float]
+    equivalent: bool
+
+
+def tost_paired_binary(b: int, c: int, n: int, margin: float, alpha: float = 0.05) -> TOSTResult:
+    """Two one-sided tests (TOST) for equivalence of paired binary outcomes,
+    on the McNemar paired-difference-of-proportions scale. b, c are
+    discordant counts (arm-A-only-pass, arm-B-only-pass); n is the total
+    number of paired tasks; margin is a proportion (0.05 = 5 percentage
+    points). Declares equivalence iff the (1 - 2*alpha)-level two-sided CI
+    for the paired difference falls strictly inside (-margin, +margin) --
+    the standard CI-inclusion form of TOST, equivalent to both one-sided
+    tests separately clearing alpha.
+
+    Caller decides whether there are enough discordant pairs to trust this
+    at all -- see report_equivalence(), which reuses the plan's existing
+    min_discordant_pairs floor rather than inventing a second one here.
+    """
+    assert n > 0, "n must be positive"
+    diff = (b - c) / n
+    se = math.sqrt(max(0.0, b + c - (b - c) ** 2 / n)) / n
+
+    if se == 0.0:
+        # ponytail: degenerate case (zero discordant pairs, or every
+        # discordant pair favors the same side) -- the point estimate is
+        # certain, so decide directly instead of dividing by a zero SE.
+        p_lower = 0.0 if diff > -margin else 1.0
+        p_upper = 0.0 if diff < margin else 1.0
+        ci = (diff, diff)
+    else:
+        z_tost = normal_ppf(1 - alpha)
+        p_lower = 1.0 - normal_cdf((diff + margin) / se)
+        p_upper = normal_cdf((diff - margin) / se)
+        ci = paired_diff_ci(b, c, n, z_tost)
+
+    p = max(p_lower, p_upper)
+    equivalent = ci[0] > -margin and ci[1] < margin
+    return TOSTResult(p_lower=p_lower, p_upper=p_upper, p=p, ci=ci, equivalent=equivalent)
+
+
+def power_paired_tost(n: int, margin: float, p_discordant: float, alpha: float = 0.05) -> float:
+    """Approximate power of the paired-binary TOST (normal approximation;
+    Phillips 1990 / Diletti, Hauschke & Steinijans 1991 formula), assuming
+    the true difference is 0 (the standard a-priori best-case assumption)
+    and that discordant pairs split evenly (b ~ c ~ n*p_discordant/2), so
+    SE ~= sqrt(p_discordant / n). The real SE depends on the unknown b/c
+    split once data exists; this is only for choosing a margin before it
+    does.
+    """
+    if n <= 0 or p_discordant <= 0 or margin <= 0:
+        return 0.0
+    se = math.sqrt(p_discordant / n)
+    z = normal_ppf(1 - alpha)
+    return max(0.0, min(1.0, 2 * normal_cdf(margin / se - z) - 1))
+
+
+def smallest_margin_for_power(n: int, p_discordant: float, target: float = 0.80, alpha: float = 0.05) -> float:
+    """Smallest equivalence margin (as a proportion) reaching `target` power
+    at fixed n and an assumed discordant rate, found by bisection -- power
+    is monotonically increasing in margin, so this is well-defined."""
+    lo, hi = 0.0, 1.0
+    if power_paired_tost(n, hi, p_discordant, alpha) < target:
+        return hi  # ponytail: target unreachable at any margin <=100pp; caller should raise n
+    for _ in range(60):
+        mid = (lo + hi) / 2.0
+        if power_paired_tost(n, mid, p_discordant, alpha) < target:
+            lo = mid
+        else:
+            hi = mid
+    return hi
+
+
+def report_equivalence(
+    plan: dict, arm_a: str, arm_b: str, runs: dict[str, dict[str, dict[int, bool]]], margin_pp: float,
+    alpha: float = 0.05,
+) -> None:
+    """Q3: TOST equivalence report between two arms. Confirmatory -- requires
+    the same locked plan as the primary verdict, and refuses below the
+    plan's existing min_discordant_pairs floor rather than a second one."""
+    majority = majority_table(runs)
+    both, only1, only2, neither = pair_table(majority, arm_a, arm_b)
+    discordant = only1 + only2
+    n_pairs = both + only1 + only2 + neither
+    margin = margin_pp / 100.0
+
+    print(f"\nEquivalence test (TOST): {arm_a} vs {arm_b}")
+    print(f"  margin given: +/-{margin_pp:g}pp   alpha: {alpha}")
+    print(
+        "  NOTE: a non-significant superiority test (McNemar/Wilcoxon above) is NOT evidence "
+        "of parity -- only this pre-specified TOST, with its own margin, can support an "
+        "equivalence claim."
+    )
+    print(
+        f"  n paired tasks: {n_pairs}   discordant pairs: {discordant} "
+        f"({arm_a} only: {only1}, {arm_b} only: {only2})"
+    )
+
+    if discordant < plan["min_discordant_pairs"]:
+        print(
+            f"  UNDERPOWERED FOR EQUIVALENCE: {discordant} discordant pairs is below the "
+            f"pre-registered minimum of {plan['min_discordant_pairs']}. Refusing to conclude "
+            "equivalence or non-equivalence -- collect more paired tasks first."
+        )
+        return
+
+    result = tost_paired_binary(only1, only2, n_pairs, margin, alpha)
+    lo_pp, hi_pp = result.ci[0] * 100, result.ci[1] * 100
+    print(f"  paired difference ({arm_a}-{arm_b}) CI: [{lo_pp:+.2f}pp, {hi_pp:+.2f}pp]")
+    print(f"  one-sided p-values: p_lower={result.p_lower:.4f}  p_upper={result.p_upper:.4f}  TOST p={result.p:.4f}")
+
+    # The plan may register a discordance rate above which the margin's 80%
+    # power no longer holds. Enforce it here rather than trusting a reader to
+    # notice: an equivalence claim at a discordance the plan called
+    # underpowered is exactly the after-the-fact reinterpretation this file
+    # exists to prevent.
+    # ponytail: only this one optional key is enforced; add others the same
+    # way if the plan grows them.
+    ceiling = plan.get("equivalence_underpowered_above_discordant_rate")
+    if ceiling is not None and n_pairs and discordant / n_pairs > ceiling:
+        achieved = power_paired_tost(n_pairs, margin, discordant / n_pairs, alpha)
+        print(
+            f"  UNDERPOWERED FOR EQUIVALENCE: observed discordance "
+            f"{discordant / n_pairs:.3f} exceeds the pre-registered ceiling of {ceiling} "
+            f"for this margin (achieved power {achieved:.3f} at +/-{margin_pp:g}pp). "
+            "Per the plan, no equivalence claim is made; the interval above is descriptive."
+        )
+        return
+    verdict = f"EQUIVALENT within +/-{margin_pp:g}pp" if result.equivalent else "NOT shown equivalent at this margin"
+    print(f"  TOST verdict: {verdict}")
+
+
+def _lang_of(task_id: str) -> str:
+    return task_id.split("/", 1)[0] if "/" in task_id else "unknown"
+
+
+def _mean(vals: list[float]) -> float:
+    return statistics.mean(vals) if vals else 0.0
+
+
+def report_descriptives(records, arms: list[str] | None = None) -> None:
+    """Q2: descriptive report, no pre-registration and no inferential claim
+    -- per-arm pass rate with Wilson 95% CI, broken down per language, plus
+    mean tokens_in/latency_s/cost_usd. Tolerates records that predate the
+    model/thinking fields."""
+    by_arm: dict[str, list[dict]] = defaultdict(list)
+    for r in records:
+        if r.get("benchmark") != "aider_polyglot":
+            continue
+        note = r.get("notes") or ""
+        if note.startswith("skip:") or note == "dry-run":
+            continue
+        by_arm[r["arm"]].append(r)
+
+    print("\nDescriptive report (Q2) -- pass rates with Wilson 95% CI. Descriptive only, no")
+    print("inferential claim (use --equivalence for a pre-registered hypothesis test).")
+
+    for arm in sorted(arms if arms is not None else by_arm):
+        recs = by_arm.get(arm, [])
+        if not recs:
+            print(f"\n{arm}: n=0")
+            continue
+        models = sorted({r.get("model") or "(unrecorded)" for r in recs})
+        thinkings = sorted({r.get("thinking") or "(unrecorded)" for r in recs})
+        k, n = sum(1 for r in recs if r["passed"]), len(recs)
+        lo, hi = wilson_ci(k, n)
+        print(f"\n{arm}  (model: {', '.join(models)}  thinking: {', '.join(thinkings)})")
+        print(f"  pass rate: {k}/{n} = {k / n:.3f}   Wilson 95% CI: [{lo:.3f}, {hi:.3f}]")
+
+        by_lang: dict[str, list[dict]] = defaultdict(list)
+        for r in recs:
+            by_lang[_lang_of(r["task_id"])].append(r)
+        for lang in sorted(by_lang):
+            lr = by_lang[lang]
+            lk, ln = sum(1 for r in lr if r["passed"]), len(lr)
+            llo, lhi = wilson_ci(lk, ln)
+            print(f"    {lang:10s} {lk}/{ln} = {lk / ln:.3f}   CI: [{llo:.3f}, {lhi:.3f}]")
+
+        tin = [float(r.get("tokens_in", 0)) for r in recs]
+        lat = [float(r.get("latency_s", 0.0)) for r in recs]
+        cost = [float(r.get("cost_usd", 0.0)) for r in recs]
+        print(f"  mean tokens_in={_mean(tin):.0f}  mean latency_s={_mean(lat):.2f}  mean cost_usd={_mean(cost):.4f}")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("paths", nargs="+", type=Path, help="One or more results JSONL files")
@@ -502,7 +731,43 @@ def main(argv=None) -> int:
         "--prereg", type=Path, default=DEFAULT_PREREG_PATH,
         help="Path to the locked pre-registration plan (default: bench/PREREGISTRATION.md)",
     )
+    ap.add_argument(
+        "--descriptives", action="store_true",
+        help="Print the Q2 descriptive report (pass rate + Wilson CI, per language, means) "
+        "and exit. Runs without a pre-registration; descriptive only, no inferential claim.",
+    )
+    ap.add_argument(
+        "--equivalence", nargs=2, metavar=("ARM_A", "ARM_B"), default=None,
+        help="Run a TOST equivalence test between two arms instead of the confirmatory report. "
+        "Requires --margin and a parseable pre-registration.",
+    )
+    ap.add_argument(
+        "--margin", type=float, default=None,
+        help="Equivalence margin in percentage points (required with --equivalence)",
+    )
+    ap.add_argument(
+        "--alpha", type=float, default=0.05,
+        help="Significance level for --equivalence (default: 0.05)",
+    )
     args = ap.parse_args(argv)
+
+    if args.equivalence and args.margin is None:
+        ap.error("--equivalence requires --margin")
+
+    if args.descriptives:
+        for p in args.paths:
+            if not p.exists():
+                print(f"error: no such file: {p}", file=sys.stderr)
+                return 1
+        records = list(load_records(args.paths))
+        if not records:
+            print("no aider_polyglot records found", file=sys.stderr)
+            return 1
+        print("Descriptive-only mode: no pre-registration read, no inferential claim made.")
+        seen_arms = sorted({r["arm"] for r in records if r.get("benchmark") == "aider_polyglot"})
+        arms = args.arms.split(",") if args.arms else seen_arms
+        report_descriptives(records, arms)
+        return 0
 
     try:
         plan, sha256_hex, _raw = load_prereg(args.prereg)
@@ -539,6 +804,11 @@ def main(argv=None) -> int:
         f"\nLoaded {len(records)} record(s) from {len(args.paths)} file(s); "
         f"{len(runs)} task(s) with usable (non-skipped, non-dry-run) pass/fail data."
     )
+
+    if args.equivalence:
+        arm_a, arm_b = args.equivalence
+        report_equivalence(plan, arm_a, arm_b, runs, args.margin, args.alpha)
+        return 0
 
     by_arm_tokens = tokens_in_by_arm(records)
     gate_ok = print_length_control(by_arm_tokens, arms, plan)

@@ -10,19 +10,31 @@ cd ~/Sites/deep-fable && omp
 # then: "read bench/RESUME.md and continue"
 ```
 
-## State at handoff
+## State at handoff (updated 2026-08-19, after steps 2–4)
 
 | | |
 |---|---|
-| Branch / HEAD | `main` @ `525f2cd`, pushed, CI green |
-| Tests | 44 passing (`uv run --with pytest python -m pytest tests/ -q`) |
-| Money spent on benchmarks | $0 — every driver is dry-run verified only |
+| Tests | 68 passing (`uv run --with pytest python -m pytest tests/ -q`) |
+| Money spent on benchmarks | $0 — every driver is still dry-run verified only |
 | Anthropic quota spent | none |
 
-Built and committed: `bench/arms/` (three skill conditions incl. the token-matched placebo
-skill), `bench/aider_polyglot/` (driver + McNemar/Wilcoxon analysis + length-control gate),
-`bench/terminal_bench/` (omp adapter + 12-task subset), `bench/PREREGISTRATION.md` (locked
-plan, mechanically enforced by `analyze.py`), `docs/BENCHMARKS.md` (the honest accounting).
+Built earlier: `bench/arms/` (skill conditions incl. the token-matched placebo skill),
+`bench/aider_polyglot/` (driver + McNemar/Wilcoxon analysis + length-control gate),
+`bench/terminal_bench/` (omp adapter + 12-task subset), `bench/PREREGISTRATION.md` (locked,
+untouched), `docs/BENCHMARKS.md`.
+
+Done since: arms are now `(model, thinking, skill)` triples (`ARM_SPECS`, `ALL_ARMS`,
+`arm_spec()`), with `ds-jspace` / `ds-plain` / `ds-placebo` / `opus-med` / `sonnet-med` wired
+through `run.py` (per-arm model+thinking, recorded in every JSONL row — dry-run verified);
+`analyze.py` gained Wilson CIs, paired TOST, the power/margin calculator, `--descriptives`
+and `--equivalence`; `bench/PREREGISTRATION-MODELS.md` is written and locked;
+`docs/BENCHMARKS.md` §9 records the margin reality.
+
+**Registered margin: 15.0pp at α = 0.025.** 5pp is unreachable at n=178 (needs 8.50pp at
+discordance 0.15, 12.98pp at 0.35). Above discordance 0.35 the plan is underpowered and
+`report_equivalence()` refuses the verdict mechanically.
+
+**The only thing left before spend is Q1 — and it needs authorisation** (see below).
 
 ## The reframing that supersedes the current design
 
@@ -69,10 +81,10 @@ omp --profile jspace -p "Reply with exactly two lines: your model id, and your t
 `profile/config.yml` is byte-locked by an existing test. If the probe shows the thinking level
 is not applied, that is a real finding — do **not** edit the file to make it pass; report it.
 
-## Design change needed for Q2 and Q3
+## Design change needed for Q2 and Q3 — DONE
 
-An arm is currently just a skill condition. It has to become a `(model, thinking, skill)`
-triple. Proposed spec, to be locked in a second pre-registration before any run:
+Implemented: `ArmSpec` / `ARM_SPECS` / `ALL_ARMS` / `arm_spec()` in `bench/arms/arms.py`,
+threaded through `run.py`. Table below is the spec, now also asserted by `tests/test_arms.py`:
 
 | Arm | Model | Thinking | Skill | Serves |
 |---|---|---|---|---|
@@ -97,38 +109,36 @@ editing it after the fact voids it. Write `bench/PREREGISTRATION-MODELS.md` inst
 | `opus-med` | subscription quota, $0 in cash | 178 Opus invocations |
 | `sonnet-med` | subscription quota, $0 in cash | 178 Sonnet invocations |
 
-Dollars are not the constraint; Anthropic quota is. Decide before running whether the
-Anthropic arms run on all 178 exercises or on a pre-registered stratified subsample (stratify
-by language, since exercise difficulty varies sharply across the six). A subsample costs
-power, and the prereg must state the resulting detectable margin rather than discovering it
-afterwards.
+Dollars are not the constraint; Anthropic quota is. **Decided:** all 178 exercises for every
+arm, 1 run each — no subsample. Subsampling only loses power (n=120 needs ~13.4pp where n=178
+needs ~11.0pp at discordance 0.25) and cash was never the binding constraint.
 
-## Statistics that must be added before Q3 can be answered
+## Statistics that must be added before Q3 can be answered — DONE
 
-1. **TOST for equivalence**, paired binary outcomes, with a pre-specified margin. Implement
-   stdlib-only alongside the existing exact McNemar.
-2. **Do not pick the margin by taste.** Compute the smallest margin for which n=178 (or the
-   chosen subsample size) reaches 80% power, and pre-register *that*. Equivalence testing
-   needs more n than superiority testing for the same margin, so 5pp may well be out of
-   reach at this n — if it is, say so and register the achievable margin instead.
-3. **Report descriptives for Q2 regardless**: per-arm pass rate with Wilson 95% CIs, per
-   language, plus mean `tokens_in`, latency and cost per arm. Q2 asks for numbers, and
-   honest numbers with intervals are the answer even where no test is significant.
-4. Keep every existing guard: the discordant-pair floor, the length-control gate (which
-   applies to the `ds-jspace` vs `ds-placebo` pair only), and the refusal to analyze without
-   a parseable plan.
+All of it is in `analyze.py` (`wilson_ci`, `paired_diff_ci`, `tost_paired_binary`,
+`power_paired_tost`, `smallest_margin_for_power`, `report_equivalence`,
+`report_descriptives`), with `--equivalence` and `--descriptives` CLI modes and 15 tests in
+`tests/test_analyze_equivalence.py`. The margin was computed, not chosen by taste: 5pp is
+unreachable at n=178, so **15.0pp at α = 0.025** is registered. See §9 of
+`docs/BENCHMARKS.md` for the full table.
+Every existing guard is retained: the discordant-pair floor, the length-control gate (which
+applies to the `ds-jspace` vs `ds-placebo` pair only), the refusal to analyze without a
+parseable plan, and — new — the plan's discordance ceiling, enforced mechanically rather than
+left to a reader.
 
 ## Order of work when resuming
 
-1. Answer Q1 with the one-line probe above. Report the result; if the thinking level does not
-   apply, that is a finding about the profile, not a test to fix.
-2. Generalise arms to `(model, thinking, skill)` triples in `bench/arms/arms.py` and
-   `bench/aider_polyglot/run.py`. Keep the existing three arm names working so
-   `bench/PREREGISTRATION.md` and the 44 tests stay valid.
-3. Add TOST plus the Wilson-CI descriptive report to `analyze.py`.
-4. Compute the achievable equivalence margin at the chosen n; write
-   `bench/PREREGISTRATION-MODELS.md` and lock it.
-5. Only then ask for authorisation to spend, with the quota cost stated per arm.
+Steps 2–4 are done (see "State at handoff"). What remains, in order, all of it gated on
+authorisation because every item spends money or quota:
+
+1. **Q1 probe (~$0.01, deepseek).** `omp --profile jspace -p "Reply with exactly two lines:
+   your model id, and your thinking level."` If the thinking level does not apply, that is a
+   finding about the profile — report it, do not edit the byte-locked `profile/config.yml`.
+2. **deepseek arms** (`ds-jspace`, `ds-plain`, `ds-placebo`), 178 exercises × 1 run, ~$2 cash.
+3. **Anthropic arms** (`opus-med`, `sonnet-med`), 178 invocations each of subscription quota.
+   Q3 needs both: Sonnet brackets where deepseek+J-Space lands.
+4. Analyze with `--descriptives` and `--equivalence ds-jspace opus-med --margin 15.0 --alpha
+   0.025` (and again vs `sonnet-med`), against `bench/PREREGISTRATION-MODELS.md`.
 
 ## Standing constraint
 

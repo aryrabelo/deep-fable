@@ -17,15 +17,21 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from bench.arms.arms import (  # noqa: E402
+    ALL_ARMS,
+    ARM_SPECS,
     ARMS,
     JSPACE_SKILL_DIR,
     PLACEBO_SKILL_DIR,
     SKILL_FILE_PAIRS,
     arm_prompt,
+    arm_spec,
     placebo_skill_dir,
     skill_dir,
     strip_frontmatter,
     token_count,
+)
+from bench.aider_polyglot.run import (  # noqa: E402
+    effective_model_thinking,
 )
 
 APPEND_SYSTEM_PATH = REPO_ROOT / "profile" / "APPEND_SYSTEM.md"
@@ -84,6 +90,71 @@ def test_unknown_arm_rejected():
 
 def test_arms_tuple_is_exactly_the_contract():
     assert ARMS == ("jspace", "none", "placebo")
+
+
+def test_all_arms_exact_contents():
+    assert ALL_ARMS == (
+        "jspace", "none", "placebo",
+        "ds-jspace", "ds-plain", "ds-placebo", "opus-med", "sonnet-med",
+    )
+
+
+def test_arm_specs_match_the_resume_table():
+    deepseek = "openrouter/deepseek/deepseek-v4-flash-0731"
+    opus = "anthropic/claude-opus-5"
+    sonnet = "anthropic/claude-sonnet-5"
+    expected = {
+        "jspace": (None, None, "jspace"),
+        "none": (None, None, "none"),
+        "placebo": (None, None, "placebo"),
+        "ds-jspace": (deepseek, "max", "jspace"),
+        "ds-plain": (deepseek, "max", "none"),
+        "ds-placebo": (deepseek, "max", "placebo"),
+        "opus-med": (opus, "medium", "none"),
+        "sonnet-med": (sonnet, "medium", "none"),
+    }
+    assert set(ARM_SPECS) == set(ALL_ARMS)
+    for name, (model, thinking, skill) in expected.items():
+        spec = ARM_SPECS[name]
+        assert (spec.model, spec.thinking, spec.skill) == (model, thinking, skill), name
+
+
+def test_arm_spec_rejects_unknown_name():
+    import pytest
+
+    with pytest.raises(ValueError):
+        arm_spec("bogus")
+
+
+def test_ds_jspace_prompt_and_skill_match_jspace():
+    assert arm_prompt("ds-jspace") == arm_prompt("jspace")
+
+
+def test_ds_plain_prompt_is_empty():
+    assert arm_prompt("ds-plain") == ""
+
+
+def test_ds_placebo_skill_dir_matches_placebo():
+    assert skill_dir("ds-placebo") == skill_dir("placebo")
+
+
+def test_opus_med_skill_dir_is_none():
+    assert skill_dir("opus-med") is None
+
+
+def test_effective_model_thinking_pinned_arm_ignores_args_defaults():
+    assert effective_model_thinking("ds-jspace", "some-default-model", "low") == (
+        "openrouter/deepseek/deepseek-v4-flash-0731", "max",
+    )
+    assert effective_model_thinking("opus-med", "some-default-model", "low") == (
+        "anthropic/claude-opus-5", "medium",
+    )
+
+
+def test_effective_model_thinking_legacy_arm_inherits_args_defaults():
+    assert effective_model_thinking("jspace", "some-default-model", "low") == (
+        "some-default-model", "low",
+    )
 
 
 # --- skill_dir() / placebo-skill/ (the actual J-Space payload) ---

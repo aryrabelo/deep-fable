@@ -355,3 +355,44 @@ summary.
 See `bench/PREREGISTRATION.md` for the full prose justification of each decision, the four-row
 power table this summary condenses, the no-peeking stopping rule, and what outcome would count
 as a falsifying (bounded) null result.
+
+## 9. The model questions (Q2/Q3), and what n=178 actually buys
+
+§8 governs the skill question on a fixed model. Two further questions — how
+deepseek+J-Space compares to Opus/Sonnet at `medium` (Q2), and which Anthropic model it
+*matches* (Q3) — need arms that vary the model, so an arm is now a `(model, thinking, skill)`
+triple (`ARM_SPECS` in `bench/arms/arms.py`): `ds-jspace`, `ds-plain`, `ds-placebo`,
+`opus-med`, `sonnet-med`. `bench/PREREGISTRATION-MODELS.md` is their locked plan.
+`bench/PREREGISTRATION.md` was not touched — editing a locked plan to cover new questions
+voids it.
+
+**Q3 is an equivalence question, and superiority tests cannot answer it.** A non-significant
+McNemar is not evidence of parity. Equivalence requires a margin fixed in advance and a TOST
+whose whole confidence interval falls inside it (`tost_paired_binary()` in `analyze.py`).
+
+**The margin this design can support is wide.** From `smallest_margin_for_power()` at 80%
+power, α = 0.05:
+
+| n | p_discordant = 0.15 | 0.25 | 0.35 |
+|---|---|---|---|
+| 178 | 8.50pp | 10.97pp | 12.98pp |
+| 120 | 10.35pp | 13.36pp | 15.80pp |
+| 90 | 11.95pp | 15.42pp | 18.25pp |
+| 60 | 14.63pp | 18.89pp | 22.35pp |
+
+A 5pp margin is **not reachable** at n=178 at any plausible discordance rate. The registered
+margin is therefore **15.0pp at α = 0.025** (Bonferroni over the two Q3 comparisons), which
+gives power 0.999 / 0.959 / 0.845 at discordance 0.15 / 0.25 / 0.35. Above a discordance of
+0.35 the plan declares itself underpowered, and `report_equivalence()` enforces that
+mechanically — it prints the achieved power and refuses the verdict rather than leaving the
+judgement to a reader.
+
+So the strongest honest positive Q3 result available here is "matches within 15 percentage
+points", stated with the margin in the sentence. Anything tighter needs more exercises, not a
+different test. Q2 is answered primarily by pass rates with Wilson 95% CIs per arm and per
+language plus cost/latency/token means (`--descriptives`), with a single confirmatory
+two-sided McNemar on `ds-jspace` vs `opus-med`.
+
+Cost, stated before authorisation: ~$2 cash for all three deepseek arms; 178 Opus and 178
+Sonnet invocations of subscription quota. Quota, not dollars, is the binding constraint, and
+it is why `runs_per_exercise` is 1 here rather than §8's 3.

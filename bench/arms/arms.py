@@ -1,6 +1,9 @@
 """Arm definitions for the J-Space benchmark harness.
 
-Three arms are compared, paired on the same task:
+An arm is a (model, thinking, skill) triple. The three original arms vary
+only the skill, on whatever model/thinking the runner is invoked with
+(model=None / thinking=None below means "inherit the runner's --model /
+--thinking default", see bench/aider_polyglot/run.py):
 
 - "jspace"  — the real always-on J-Space snippet (profile/APPEND_SYSTEM.md)
   appended to the system prompt, unmodified, with the real skill directory
@@ -13,11 +16,20 @@ Three arms are compared, paired on the same task:
   "longer system prompt" / "more skill material to read" as confounds,
   distinct from controlling for "J-Space's instructions".
 
+Five more arms pin model and thinking explicitly, to compare models rather
+than just skill conditions (see bench/RESUME.md): "ds-jspace" / "ds-plain" /
+"ds-placebo" run deepseek-v4-flash-0731 at thinking "max" with each skill
+condition; "opus-med" and "sonnet-med" run claude-opus-5 / claude-sonnet-5
+at thinking "medium" with no skill. Each still resolves its prompt/skill-dir
+via the same "jspace"/"none"/"placebo" skill vocabulary as the original
+three — see ArmSpec.skill and arm_spec().
+
 Stdlib only, no repo-level dependency file needed.
 """
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -27,6 +39,46 @@ JSPACE_SKILL_DIR = REPO_ROOT / ".omp" / "skills" / "j-space"
 PLACEBO_SKILL_DIR = Path(__file__).resolve().parent / "placebo-skill"
 
 ARMS = ("jspace", "none", "placebo")
+
+
+@dataclass(frozen=True)
+class ArmSpec:
+    """One benchmark arm: which model/thinking to run, and which skill
+    condition ("jspace" | "none" | "placebo") to apply. `model`/`thinking`
+    of None means "inherit the runner's --model/--thinking default" — the
+    legacy behaviour of the original three arms.
+    """
+    name: str
+    model: str | None
+    thinking: str | None
+    skill: str
+
+
+_DEEPSEEK_MODEL = "openrouter/deepseek/deepseek-v4-flash-0731"
+_OPUS_MODEL = "anthropic/claude-opus-5"
+_SONNET_MODEL = "anthropic/claude-sonnet-5"
+
+ALL_ARMS = ARMS + ("ds-jspace", "ds-plain", "ds-placebo", "opus-med", "sonnet-med")
+
+ARM_SPECS: dict[str, ArmSpec] = {
+    "jspace": ArmSpec("jspace", None, None, "jspace"),
+    "none": ArmSpec("none", None, None, "none"),
+    "placebo": ArmSpec("placebo", None, None, "placebo"),
+    "ds-jspace": ArmSpec("ds-jspace", _DEEPSEEK_MODEL, "max", "jspace"),
+    "ds-plain": ArmSpec("ds-plain", _DEEPSEEK_MODEL, "max", "none"),
+    "ds-placebo": ArmSpec("ds-placebo", _DEEPSEEK_MODEL, "max", "placebo"),
+    "opus-med": ArmSpec("opus-med", _OPUS_MODEL, "medium", "none"),
+    "sonnet-med": ArmSpec("sonnet-med", _SONNET_MODEL, "medium", "none"),
+}
+
+
+def arm_spec(name: str) -> ArmSpec:
+    """Look up the ArmSpec for `name`, raising ValueError if unknown."""
+    try:
+        return ARM_SPECS[name]
+    except KeyError:
+        raise ValueError(f"unknown arm {name!r}, expected one of {ALL_ARMS}") from None
+
 
 # Per-file correspondence between the placebo skill tree and the real one,
 # used to check each placebo file is token-matched against its specific
@@ -71,29 +123,28 @@ def strip_frontmatter(text: str) -> str:
 
 
 def arm_prompt(arm: str) -> str:
-    """Return the system-prompt addendum for `arm`."""
-    if arm not in ARMS:
-        raise ValueError(f"unknown arm {arm!r}, expected one of {ARMS}")
-    if arm == "none":
+    """Return the system-prompt addendum for `arm` (any name in ALL_ARMS)."""
+    skill = arm_spec(arm).skill
+    if skill == "none":
         return ""
-    if arm == "jspace":
+    if skill == "jspace":
         return JSPACE_SNIPPET_PATH.read_text()
     return _COMMENT_HEADER.sub("", PLACEBO_PATH.read_text(), count=1)
 
 
 def skill_dir(arm: str) -> Path | None:
-    """Directory to point the agent's skill-loading mechanism at for `arm`.
+    """Directory to point the agent's skill-loading mechanism at for `arm`
+    (any name in ALL_ARMS).
 
-    "jspace" -> the real, canonical .omp/skills/j-space directory.
-    "placebo" -> the length-matched, content-free bench/arms/placebo-skill
+    "jspace" skill -> the real, canonical .omp/skills/j-space directory.
+    "placebo" skill -> the length-matched, content-free bench/arms/placebo-skill
                  directory (see SKILL_FILE_PAIRS for the per-file mapping).
-    "none" -> None; no skill directory is installed at all.
+    "none" skill -> None; no skill directory is installed at all.
     """
-    if arm not in ARMS:
-        raise ValueError(f"unknown arm {arm!r}, expected one of {ARMS}")
-    if arm == "none":
+    skill = arm_spec(arm).skill
+    if skill == "none":
         return None
-    if arm == "jspace":
+    if skill == "jspace":
         return JSPACE_SKILL_DIR
     return PLACEBO_SKILL_DIR
 

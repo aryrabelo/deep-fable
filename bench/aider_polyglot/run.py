@@ -3,7 +3,7 @@
 # requires-python = ">=3.12"
 # dependencies = []
 # ///
-"""Three-arm driver over the Aider polyglot-benchmark exercise set.
+"""Driver over the Aider polyglot-benchmark exercise set, across the arms in bench.arms.arms.ALL_ARMS.
 
 Ground truth (verified by reading the real repo, not guessed):
 
@@ -71,7 +71,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent
 sys.path.insert(0, str(REPO_ROOT))
-from bench.arms.arms import ARMS, arm_prompt  # noqa: E402
+from bench.arms.arms import ALL_ARMS, ARMS, arm_prompt, arm_spec  # noqa: E402
 
 POLYGLOT_REPO_URL = "https://github.com/Aider-AI/polyglot-benchmark"
 CACHE_DIR = HERE / ".cache" / "polyglot-benchmark"
@@ -88,6 +88,15 @@ LANG_DIRS = {
 
 DEFAULT_MODEL = os.environ.get("BENCH_MODEL", "openrouter/deepseek/deepseek-v4-flash-0731")
 DEFAULT_THINKING = os.environ.get("BENCH_THINKING", "max")
+
+
+def effective_model_thinking(arm: str, args_model: str, args_thinking: str) -> tuple[str, str]:
+    """Resolve the (model, thinking) an arm actually runs with: the arm's own
+    pinned values (ds-*/opus-med/sonnet-med) if it has them, else the
+    runner's --model/--thinking (the legacy jspace/none/placebo behaviour).
+    """
+    spec = arm_spec(arm)
+    return spec.model or args_model, spec.thinking or args_thinking
 
 
 @dataclass(frozen=True)
@@ -406,7 +415,7 @@ def invoke_omp(
         "omp", "-p", "--auto-approve", "--session-dir", str(session_dir),
         "--model", model, "--thinking", thinking, "--cwd", str(cwd),
     ]
-    if arm != "none":
+    if arm_spec(arm).skill != "none":
         sysprompt_file = run_dir / "SYSTEM_APPEND.md"
         sysprompt_file.write_text(arm_prompt(arm))
         cmd += ["--append-system-prompt", str(sysprompt_file)]
@@ -433,7 +442,7 @@ def invoke_omp(
 _RECORD_DEFAULTS = dict(
     benchmark="aider_polyglot",
     task_id="", arm="", run_idx=1, passed=False, latency_s=0.0,
-    model="", harness="omp", tokens_in=0, tokens_out=0, cost_usd=0.0, notes="",
+    model="", thinking="", harness="omp", tokens_in=0, tokens_out=0, cost_usd=0.0, notes="",
 )
 
 
@@ -456,7 +465,7 @@ def default_out_path() -> Path:
 def parse_args(argv=None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--exercises", type=int, default=0, metavar="N", help="Sample N exercises (0 = all)")
-    p.add_argument("--arms", default=",".join(ARMS), help=f"Comma-separated subset of {ARMS}")
+    p.add_argument("--arms", default=",".join(ARMS), help=f"Comma-separated subset of {ALL_ARMS}")
     p.add_argument("--runs", type=int, default=1, metavar="N", help="Runs per (exercise, arm) pair")
     p.add_argument("--dry-run", action="store_true", help="Resolve + assemble only; never call the agent")
     p.add_argument("--out", type=Path, default=None, help="Output JSONL path")
@@ -473,8 +482,8 @@ def main(argv=None) -> int:
 
     arms = [a.strip() for a in args.arms.split(",") if a.strip()]
     for a in arms:
-        if a not in ARMS:
-            print(f"error: unknown arm {a!r}, expected one of {ARMS}", file=sys.stderr)
+        if a not in ALL_ARMS:
+            print(f"error: unknown arm {a!r}, expected one of {ALL_ARMS}", file=sys.stderr)
             return 2
 
     repo_dir = ensure_repo(args.repo_dir)
@@ -500,10 +509,11 @@ def main(argv=None) -> int:
         for ex in exercises:
             ok, reason = toolchains[ex.lang]
             for arm in arms:
+                model, thinking = effective_model_thinking(arm, args.model, args.thinking)
                 for run_idx in range(1, args.runs + 1):
                     if not ok:
                         emit(fh, task_id=ex.task_id, arm=arm, run_idx=run_idx,
-                             model=args.model, notes=f"skip: {reason}")
+                             model=model, thinking=thinking, notes=f"skip: {reason}")
                         n_records += 1
                         continue
 
@@ -518,14 +528,14 @@ def main(argv=None) -> int:
                             print("=" * 72)
                             printed_prompt = True
                         emit(fh, task_id=ex.task_id, arm=arm, run_idx=run_idx,
-                             model=args.model, notes="dry-run")
+                             model=model, thinking=thinking, notes="dry-run")
                         n_records += 1
                         continue
 
                     run_dir = make_scratch(ex, arm, run_idx)
                     work = run_dir / "work"
                     latency, tokens_in, tokens_out, cost_usd = invoke_omp(
-                        prompt, arm, work, args.model, args.thinking, run_dir, args.agent_timeout
+                        prompt, arm, work, model, thinking, run_dir, args.agent_timeout
                     )
                     restore_test_files(ex, work)
                     try:
@@ -535,7 +545,7 @@ def main(argv=None) -> int:
                         passed, note = False, "test command timed out"
 
                     emit(fh, task_id=ex.task_id, arm=arm, run_idx=run_idx, passed=passed,
-                         latency_s=round(latency, 2), model=args.model, notes=note,
+                         latency_s=round(latency, 2), model=model, thinking=thinking, notes=note,
                          tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=round(cost_usd, 6))
                     n_records += 1
                     shutil.rmtree(run_dir, ignore_errors=True)
