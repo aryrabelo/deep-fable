@@ -1,0 +1,11 @@
+#!/bin/bash
+
+apt-get update
+apt-get install -y curl unzip
+
+curl -fsSL https://bun.sh/install | bash
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
+bun install -g @oh-my-pi/pi-coding-agent@{{ version }}
+omp --version

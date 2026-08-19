@@ -6,3 +6,9 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 node_modules/
+
+# Benchmark scratch. Real results JSONL is committed on purpose: docs/BENCHMARKS.md
+# requires publishing raw results, so only dry-runs and working copies are ignored.
+bench/results/*dry-run*.jsonl
+bench/**/scratch/
+bench/**/.venv/

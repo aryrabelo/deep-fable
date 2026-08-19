@@ -1,0 +1,16 @@
+# Curated subset of terminal-bench-core==0.1.1 for harness validation and
+# cost calibration. NOT a statistically powered arm-comparison set — see
+# README.md "Scope limitation". One task id per line; trailing `# ...` is
+# the reason it's in the set. Blank lines and full-line comments ignored.
+hello-world              # easy/file-operations — near-zero-cost end-to-end smoke test: build, run, grade, all wired correctly before spending on anything harder
+csv-to-parquet           # easy/data-science — easy tier in a different category from the smoke test, small pandas-based container
+fix-permissions          # easy/system-administration — easy tier, classic unix task, cheap container
+extract-safely            # easy/security — easy tier security, distinct failure surface from file/data tasks
+modernize-fortran-build  # easy/software-engineering — easy tier build-toolchain flavor, no heavy qemu/kernel image
+conda-env-conflict-resolution  # medium/debugging — medium tier, environment-resolution debugging
+fix-git                  # medium/software-engineering — medium tier, git internals task
+openssl-selfsigned-cert  # medium/security — medium tier security, distinct from the easy security task above
+jupyter-notebook-server  # medium/data-science — medium tier, service-oriented data-science task
+chess-best-move          # medium/games — only reasonably-sized games-category task (the others are hard-tier); adds a category the rest of the set doesn't cover
+swe-bench-fsspec         # medium/debugging — real SWE-bench-derived task embedded in terminal-bench, representative of a well-known external benchmark family
+intrusion-detection      # hard/system-administration — sole hard-tier representative, keeps the set from being all easy/medium
