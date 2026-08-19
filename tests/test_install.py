@@ -57,6 +57,22 @@ def test_install_copies_profile_and_skill_and_registers_alias(tmp_path):
     assert "deep-fable" in invocation
 
 
+def test_install_copies_deep_fable_command(tmp_path):
+    """The /deep-fable slash command ships into the profile, byte-identical."""
+    profile_dir = tmp_path / "profile-out"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _make_omp_stub(bin_dir, tmp_path / "omp_argv.log")
+
+    result = _run_install(tmp_path, profile_dir, bin_dir)
+    assert result.returncode == 0, result.stderr
+
+    installed = profile_dir / "commands" / "deep-fable.md"
+    source = REPO_ROOT / ".omp" / "commands" / "deep-fable.md"
+    assert installed.read_bytes() == source.read_bytes()
+    assert "skill://j-space" in source.read_text()
+
+
 def test_install_is_idempotent(tmp_path):
     profile_dir = tmp_path / "profile-out"
     bin_dir = tmp_path / "bin"

@@ -55,6 +55,25 @@ Gemini CLI:
 Then plain `omp` discovers it from the skill's description. Verified: invisible outside the
 repo before that install, visible after. Undo with `rm -rf ~/.agents/skills/j-space`.
 
+### `/deep-fable` — on demand, mid-session
+
+`deep-fable` in your shell is the alias (a zsh function running `omp --profile=jspace`), and
+it loads the skill at boot. `/deep-fable` is different: a slash command that establishes the
+J-Space workspace whenever you want it, in a session that started normally.
+
+```
+/deep-fable refactor this module without breaking callers
+```
+
+It reads `skill://j-space`, classifies the task, routes to the module the skill names, then
+stays under that discipline for the rest of the session. Verified without the profile:
+the command reported reading `.omp/skills/j-space/SKILL.md` and assigned a pass level.
+
+It ships in `.omp/commands/deep-fable.md`, so it works inside this repo, and `./install.sh`
+copies it into the profile, so it also works in every `deep-fable` session. For it in *every*
+OMP session anywhere, copy that one file to `~/.omp/agent/commands/` — `./install.sh agents`
+prints the exact command.
+
 ## Other coding agents
 
 The skill itself is agent-agnostic — no OMP-specific syntax anywhere in it. Every major

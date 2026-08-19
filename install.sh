@@ -14,8 +14,9 @@ esac
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILE_DIR="${OMP_PROFILE_DIR:-$HOME/.omp/profiles/jspace/agent}"
 SKILLS_DIR="$PROFILE_DIR/skills"
+COMMANDS_DIR="$PROFILE_DIR/commands"
 
-mkdir -p "$PROFILE_DIR" "$SKILLS_DIR"
+mkdir -p "$PROFILE_DIR" "$SKILLS_DIR" "$COMMANDS_DIR"
 
 cp "$SCRIPT_DIR/profile/config.yml" "$PROFILE_DIR/config.yml"
 cp "$SCRIPT_DIR/profile/APPEND_SYSTEM.md" "$PROFILE_DIR/APPEND_SYSTEM.md"
@@ -24,6 +25,10 @@ cp "$SCRIPT_DIR/profile/APPEND_SYSTEM.md" "$PROFILE_DIR/APPEND_SYSTEM.md"
 # this repo checkout.
 rm -rf "$SKILLS_DIR/j-space"
 cp -R "$SCRIPT_DIR/.omp/skills/j-space" "$SKILLS_DIR/j-space"
+
+# The /deep-fable slash command, so the discipline can also be invoked on demand
+# mid-session instead of only at boot.
+cp "$SCRIPT_DIR/.omp/commands/deep-fable.md" "$COMMANDS_DIR/deep-fable.md"
 
 echo "Installed jspace profile at $PROFILE_DIR"
 

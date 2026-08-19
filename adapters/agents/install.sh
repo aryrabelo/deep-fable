@@ -32,6 +32,10 @@ AGENTS.md your agent reads:
 
   When a task needs multi-step reasoning, use the j-space skill before answering.
 
+Optional -- for a /deep-fable slash command in every OMP session, copy one file:
+
+  cp "$REPO_ROOT/.omp/commands/deep-fable.md" ~/.omp/agent/commands/deep-fable.md
+
 Model choice stays yours, in each agent's own settings. This installer writes none.
 
 To undo: rm -rf "$DEST"
