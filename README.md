@@ -1,5 +1,8 @@
 # deep-fable
 
+[![test](https://github.com/aryrabelo/deep-fable/actions/workflows/test.yml/badge.svg)](https://github.com/aryrabelo/deep-fable/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 An OMP profile that boots every session into the J-Space inner-workspace discipline, running on DeepSeek — plus the benchmark that motivated putting DeepSeek in that seat.
 
 No harness, no state machine. A profile: a system prompt append, a model default, and a vendored skill.
@@ -23,6 +26,30 @@ omp --profile jspace
 ```
 
 Every session starts by reading `skill://j-space` and operating under it, on `openrouter/deepseek/deepseek-v4-flash-0731` at `max` thinking.
+
+## Other coding agents
+
+The skill itself is agent-agnostic — no OMP-specific syntax anywhere in it. Two extra
+targets install today:
+
+```bash
+./install.sh claude   # -> ~/.claude/skills/j-space
+./install.sh codex    # -> ~/.agents/skills/j-space
+```
+
+Neither adapter edits your config. They copy the skill and print the optional always-on
+snippet for you to paste — model choice stays with your agent's own settings.
+
+| Agent | Status |
+|---|---|
+| OMP | ✅ `./install.sh` |
+| Claude Code | ✅ `./install.sh claude` |
+| Codex CLI | ✅ `./install.sh codex` |
+| OpenCode · Cursor · Gemini CLI | 🔜 see [ROADMAP.md](ROADMAP.md) |
+
+In-repo the skill lives once at `.omp/skills/j-space`; `.agents/skills/j-space` is a
+symlink to it, which Codex CLI and the OpenCode/Cursor compat paths read directly. Full
+support matrix, open questions, and where each remaining piece goes: [ROADMAP.md](ROADMAP.md).
 
 ## Why DeepSeek
 
@@ -53,17 +80,21 @@ DeepSeek doesn't clearly lose. It clearly costs less. That's the whole case for 
 ```
 deep-fable/
 ├── README.md
+├── ROADMAP.md               # support matrix, open questions, where each piece goes
 ├── LICENSE
 ├── .gitignore
-├── install.sh
+├── install.sh               # ./install.sh [omp|claude|codex]
 ├── profile/
 │   ├── config.yml           # modelRoles.default: deepseek-v4-flash-0731, defaultThinkingLevel: max
 │   └── APPEND_SYSTEM.md     # boot instruction: read skill://j-space, operate under it
 ├── .omp/skills/j-space/     # vendored J-Space Cognition Suite (Apache-2.0, see LICENSE)
+├── .agents/skills/j-space   # symlink -> .omp/skills/j-space (Codex / OpenCode / Cursor)
+├── adapters/                # per-agent installers (claude, codex)
+├── .github/workflows/       # CI: pytest on push and pull_request
 ├── model-eval/              # Round 1 + Round 3 benchmark harness, briefs, reports
 │   └── round3/
 ├── jspace-eval/             # J-Space-specific eval tasks and verifier
-├── tests/                   # pytest for install.sh / profile wiring
+├── tests/                   # pytest for install.sh / adapters / repo hygiene
 └── docs/images/             # benchmark screenshots
 ```
 

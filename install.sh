@@ -3,6 +3,14 @@
 # J-Space skill loaded on every session, aliased to `deep-fable`.
 set -euo pipefail
 
+# Target dispatch. No argument -> the OMP profile flow below, unchanged.
+TARGET="${1:-omp}"
+case "$TARGET" in
+  omp) : ;;
+  claude|codex) exec "$(dirname "${BASH_SOURCE[0]}")/adapters/$TARGET/install.sh" ;;
+  *) echo "Unknown target: $TARGET (expected: omp, claude, codex)" >&2; exit 1 ;;
+esac
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILE_DIR="${OMP_PROFILE_DIR:-$HOME/.omp/profiles/jspace/agent}"
 SKILLS_DIR="$PROFILE_DIR/skills"
