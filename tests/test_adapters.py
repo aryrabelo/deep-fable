@@ -12,6 +12,7 @@ CANONICAL_SKILL = REPO_ROOT / ".omp" / "skills" / "j-space"
 # target -> (env var the adapter honours, skill path relative to that env dir,
 #            a string the printed paste-yourself snippet must contain)
 TARGETS = {
+    "agents": ("AGENTS_SKILLS_DIR", "j-space", "AGENTS.md"),
     "claude": ("CLAUDE_SKILLS_DIR", "j-space", "CLAUDE.md"),
     "codex": ("AGENTS_SKILLS_DIR", "j-space", "AGENTS.md"),
     "opencode": ("OPENCODE_CONFIG_DIR", "skills/j-space", "AGENTS.md"),

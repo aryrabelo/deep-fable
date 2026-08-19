@@ -25,7 +25,35 @@ deep-fable
 omp --profile jspace
 ```
 
-Every session starts by reading `skill://j-space` and operating under it, on `openrouter/deepseek/deepseek-v4-flash-0731` at `max` thinking.
+Every session starts by reading `skill://j-space` and operating under it, on
+`openrouter/deepseek/deepseek-v4-flash-0731` at `max` thinking.
+
+### Without the profile
+
+The profile is only three things — a model default, a thinking default, and a system-prompt
+append — and all three are plain flags:
+
+```bash
+# same behaviour, no profile, no alias
+omp --model openrouter/deepseek/deepseek-v4-flash-0731 --thinking max \
+    --append-system-prompt profile/APPEND_SYSTEM.md
+
+# or let the config do the model, keeping your own thinking level
+omp --config profile/config.yml
+```
+
+`--append-system-prompt` takes a file path and appends the contents verbatim.
+
+To get the skill in **every** OMP session in any directory, with no profile and no flags,
+install it to the shared Agent Skills path — one copy also serves Codex CLI, Cursor, and
+Gemini CLI:
+
+```bash
+./install.sh agents     # -> ~/.agents/skills/j-space
+```
+
+Then plain `omp` discovers it from the skill's description. Verified: invisible outside the
+repo before that install, visible after. Undo with `rm -rf ~/.agents/skills/j-space`.
 
 ## Other coding agents
 
@@ -33,6 +61,7 @@ The skill itself is agent-agnostic — no OMP-specific syntax anywhere in it. Ev
 coding agent installs today:
 
 ```bash
+./install.sh agents     # -> ~/.agents/skills/j-space   (shared: OMP + Codex + Cursor + Gemini)
 ./install.sh claude     # -> ~/.claude/skills/j-space
 ./install.sh codex      # -> ~/.agents/skills/j-space
 ./install.sh opencode   # -> ~/.config/opencode/skills/j-space
@@ -43,14 +72,14 @@ coding agent installs today:
 No adapter edits your config. Each copies the skill and prints the optional always-on
 snippet for you to paste — model choice stays with your agent's own settings.
 
-| Agent | Status |
-|---|---|
-| OMP | ✅ `./install.sh` |
-| Claude Code | ✅ `./install.sh claude` |
-| Codex CLI | ✅ `./install.sh codex` |
-| OpenCode | ✅ `./install.sh opencode` |
-| Cursor | ✅ `./install.sh cursor` |
-| Gemini CLI | ✅ `./install.sh gemini` |
+| Agent | Install | Discovery verified |
+|---|---|---|
+| OMP | ✅ `./install.sh` / `./install.sh agents` | ✅ fires unprompted |
+| Claude Code | ✅ `./install.sh claude` | ✅ fires unprompted |
+| Codex CLI | ✅ `./install.sh codex` | ✅ fires unprompted |
+| OpenCode | ✅ `./install.sh opencode` | ⚠️ loads, but competes with your other skills |
+| Cursor | ✅ `./install.sh cursor` | ⏸ no Cursor CLI to test with |
+| Gemini CLI | ✅ `./install.sh gemini` | ⚠️ listed as enabled; live turn blocked by API key |
 
 In-repo the skill lives once at `.omp/skills/j-space`; `.agents/skills/j-space` is a symlink
 to it, and that single path is read natively by OMP, Codex CLI, Cursor, and Gemini CLI. Full

@@ -90,12 +90,28 @@ has a different model id and auth path in each tool. Until that is mapped per to
 adapter here writes a model setting; each one prints the key and leaves it to the user.
 Mapping it is a separate research scope, not a code change.
 
-## Acceptance test per harness
+## Acceptance test per harness — run 2026-08-19
 
-One smoke test per adapter, same shape for all: a scripted prompt that must trigger the
-skill before any code is produced, run in the real harness, transcript captured and
-committed under `jspace-eval/`. Passing = the skill fired unprompted; failing = discovery
-is broken for that harness regardless of the files being in place.
+Installation is proven by `tests/test_adapters.py`. Discovery is proven by running each real
+CLI headless with a task matching the skill's description and never naming it. Results,
+transcripts, and the two methodological limits found along the way:
+[`jspace-eval/smokes/INDEX.md`](jspace-eval/smokes/INDEX.md).
+
+| harness | discovery | note |
+|---|---|---|
+| Claude Code | ✅ PASS | `Skill {"skill": "j-space"}` fired before any other tool call |
+| Codex CLI | ✅ PASS | read the real `SKILL.md` through its own shell tool |
+| OMP | ✅ PASS | verified twice: invisible before `./install.sh agents`, visible after |
+| Gemini CLI | ⚠️ INCONCLUSIVE | `gemini skills list` shows it Enabled; live turn blocked by API-key 429/403 |
+| OpenCode | ⚠️ FAIL (selection) | loads fine (`opencode debug skill`); the model preferred a competing skill |
+| Cursor | ⏸ not run | no Cursor CLI installed on this machine |
+
+Two limits worth knowing before re-running these: OpenCode's global `~/.agents/skills` and
+`~/.claude/skills` scan is relocated by neither `OPENCODE_CONFIG_DIR` nor `HOME`, so a fully
+hermetic smoke is impossible on a machine with other skills installed; and Claude Code's
+`CLAUDE_CONFIG_DIR` relocation cannot be used non-interactively on macOS, because Keychain
+namespaces its OAuth credential per config path and the only bypass (`--bare`) disables skill
+auto-discovery.
 
 ## Distribution
 
