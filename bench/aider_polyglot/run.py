@@ -319,13 +319,26 @@ def _copy_ignore(_dir: str, names: list[str]) -> set[str]:
     return {n for n in names if n in {".meta", ".docs", ".approaches"}}
 
 
+def work_dir(run_dir: Path, ex: Exercise) -> Path:
+    """The agent's working directory inside `run_dir`.
+
+    Named after the exercise, NOT a fixed "work": the C++ exercises derive
+    their CMake project and source filenames from the directory name
+    (`get_filename_component(exercise ${CMAKE_CURRENT_SOURCE_DIR} NAME)`),
+    so a directory called `work` makes CMake demand `work.cpp`/`work_test.cpp`
+    and every C++ exercise fails to build no matter what the agent writes.
+    Keeping the pristine directory name is also the only layout the upstream
+    exercises are known to work under, for every language.
+    """
+    return run_dir / ex.name
+
+
 def make_scratch(ex: Exercise, arm: str, run_idx: int) -> Path:
     run_dir = SCRATCH_ROOT / f"{ex.lang}__{ex.name}__{arm}__{run_idx}"
     if run_dir.exists():
         shutil.rmtree(run_dir)
     run_dir.mkdir(parents=True)
-    work = run_dir / "work"
-    shutil.copytree(ex.dir, work, ignore=_copy_ignore)
+    shutil.copytree(ex.dir, work_dir(run_dir, ex), ignore=_copy_ignore)
     return run_dir
 
 
@@ -355,19 +368,21 @@ def _find_session_file(session_dir: Path) -> Path | None:
     `--session-dir` scopes ALL of omp's session storage for that invocation
     to a directory we create fresh and own exclusively — nothing else can
     ever write there. That makes resolution deterministic by construction:
-    whatever main-session `*.jsonl` file shows up afterward is unambiguously
-    this invocation's transcript, no "newest file" heuristic or before/after
-    directory diff required (the whole tree is empty before the call).
+    whatever transcript shows up afterward is unambiguously this
+    invocation's, no "newest file" heuristic required.
 
-    The nesting under `session_dir` is `[<subdir>/]sessions/<project-slug>/
-    <timestamp>_<uuid>.jsonl` — observed on this machine as
-    `~/.omp/agent/sessions/<slug>/...` with the default storage root
-    `~/.omp/agent` (`PI_CODING_AGENT_DIR`), but `--session-dir`'s exact
-    prefix relative to that root isn't independently confirmed [INFERENCE],
-    so we glob for the `sessions/<slug>/<file>.jsonl` shape at any depth
-    rather than hard-coding one prefix.
+    The observed layout (confirmed 2026-08-19 against real invocations, after
+    an earlier guess at `sessions/<project-slug>/<file>.jsonl` silently
+    matched nothing and recorded every usage figure as 0) is:
+
+        <session_dir>/<timestamp>_<uuid>.jsonl          <- the transcript
+        <session_dir>/<timestamp>_<uuid>/__advisor.jsonl <- side-car, not it
+
+    So: any `*.jsonl` at any depth, minus the `__`-prefixed side-cars. Files
+    are matched at any depth rather than only the top level so a future omp
+    that reintroduces a subdirectory prefix keeps working.
     """
-    candidates = sorted(session_dir.glob("**/sessions/*/*.jsonl"))
+    candidates = [p for p in session_dir.glob("**/*.jsonl") if not p.name.startswith("__")]
     if not candidates:
         return None
     return max(candidates, key=lambda p: p.stat().st_mtime)
@@ -586,10 +601,23 @@ def _process_unit(
         return
 
     run_dir = make_scratch(ex, arm, run_idx)
-    work = run_dir / "work"
+    work = work_dir(run_dir, ex)
     latency, tokens_in, tokens_out, cost_usd = invoke_omp(
         prompt, arm, work, model, thinking, run_dir, args.agent_timeout
     )
+    # A real invocation that reports zero input tokens means the transcript
+    # was not found or not parsed, not that the model read nothing. Those
+    # rows are unusable: the length-control gate and the mean-tokens_in
+    # figure that §7 of docs/BENCHMARKS.md requires are both computed from
+    # this field. Fail the whole sweep on the first one rather than spend
+    # hours writing rows that cannot support a claim.
+    if tokens_in == 0:
+        raise RuntimeError(
+            f"no usage parsed for {ex.task_id} [{arm}] — session transcript missing or "
+            f"unreadable under {run_dir / 'session'}. Refusing to continue: every "
+            "subsequent row would be unusable for the length-control gate. Scratch dir "
+            "kept for inspection."
+        )
     restore_test_files(ex, work)
     try:
         passed, output = run_tests(ex, work, args.test_timeout)

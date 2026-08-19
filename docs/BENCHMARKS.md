@@ -436,3 +436,57 @@ One fragility noted while checking: the installed profile at
 The two agree today on both keys. An edit to the repo file will not reach a live profile
 without a reinstall, so any future claim about the profile must re-run the `config get` query
 rather than cite the repo file.
+
+## 11. The first sweep attempt was aborted after 5 minutes, and why that was right
+
+The deepseek sweep (`ds-jspace`, `ds-plain`, `ds-placebo`) was launched 2026-08-19 and killed
+after ~5 minutes and one completed record. That record is why:
+
+```json
+{"task_id":"cpp/all-your-base","arm":"ds-placebo","passed":false,"latency_s":248.65,
+ "tokens_in":0,"cost_usd":0.0,
+ "notes":"add_executable): Cannot find source file: work_test.cpp ..."}
+```
+
+Three harness bugs, none of them about any model:
+
+**1. Every C++ exercise was unwinnable.** `make_scratch()` copied each exercise into a
+directory literally named `work`. The upstream C++ `CMakeLists.txt` derives the project and
+source filenames from the directory name:
+
+```cmake
+get_filename_component(exercise ${CMAKE_CURRENT_SOURCE_DIR} NAME)
+```
+
+so CMake demanded `work.cpp` / `work_test.cpp` and the build failed regardless of what the
+agent wrote. All 29 C++ exercises would have scored `passed: false` for every arm — a harness
+artifact indistinguishable, in the results file, from 29 genuine model failures. Fixed by
+naming the working directory after the exercise (`work_dir()`), which is the layout upstream
+exercises are known to work under for every language.
+
+**2. Every usage figure was 0.** `_find_session_file()` globbed
+`**/sessions/<slug>/*.jsonl`. The real layout is `<session_dir>/<timestamp>_<uuid>.jsonl` with
+a `__advisor.jsonl` side-car — singular, no slug directory. The glob matched nothing, so
+`invoke_omp()` took its "no transcript" branch and recorded `tokens_in=0, cost_usd=0.0` every
+time. That silently destroys the length-control gate (§5) and the mean-`tokens_in` figure §7
+requires for any claim. The docstring had flagged that path as unconfirmed `[INFERENCE]`; it
+was wrong. Fixed and verified against the aborted run's own transcripts, which parse to real
+figures (e.g. 318,026 input tokens / $0.0070 for one `ds-jspace` invocation).
+
+**3. Nothing would have complained.** The driver wrote zero-usage rows without protest. It now
+raises on the first real invocation that reports `tokens_in == 0`, keeping the scratch
+directory for inspection, on the principle that a row which cannot support a claim is a
+failure and not a datum.
+
+**Cost correction.** Real per-invocation cost measured from those transcripts is ~$0.007–0.009,
+so 534 deepseek invocations is **~$4.3, not the ~$2** estimated in §9 and
+`bench/PREREGISTRATION-MODELS.md`. The estimate was wrong, not the plan; no registered
+statistical parameter depends on it.
+
+**What this says about the earlier rounds.** Bugs 1 and 2 were both *silent* — they produced a
+well-formed results file full of plausible-looking failures and zeros. Had the sweep run its
+full 9+ hours, the analysis would have reported a real McNemar test over data whose C++ stratum
+was pure harness noise, and the length-control gate would have compared zero against zero and
+passed. §7's checklist would not have caught it. The lesson is the one from Round 3 and from Q1
+in §10, a third time: **the first real record of any sweep must be read by a human before the
+rest are paid for.**

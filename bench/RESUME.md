@@ -1,7 +1,7 @@
-# Resume here — the three questions that actually need answering
+# Resume here — the sweep is fixed but unverified and uncommitted
 
-Written 2026-08-19 before a machine restart. Everything needed to continue is in this file.
-Nothing paid has been run. No sweep exists.
+Updated 2026-08-19 after the first sweep attempt was aborted. Everything needed to continue is
+in this file.
 
 Resume with:
 
@@ -10,13 +10,41 @@ cd ~/Sites/deep-fable && omp
 # then: "read bench/RESUME.md and continue"
 ```
 
-## State at handoff (updated 2026-08-19, after Q1 and steps 2–4)
+## READ THIS FIRST — three things are in an unfinished state
+
+1. **`bench/aider_polyglot/run.py` has uncommitted fixes that were never test-verified.** The
+   session ended when the `bash` tool was denied by policy mid-task, so nothing could be run
+   after the edits. Before anything else:
+   `uv run --with pytest python -m pytest tests/ -q` (expect 78 passing) and re-read the diff.
+2. **`bench/results/aider_polyglot-ds-arms.jsonl` is CONTAMINATED — delete it, never
+   `--resume` from it.** Its rows were produced by the broken harness described in §11 of
+   `docs/BENCHMARKS.md`: every `tokens_in` is 0 and every C++ exercise was unwinnable.
+   `rm bench/results/aider_polyglot-ds-arms.jsonl`
+3. **`kimi-code` is not authenticated**, so the registered `kimi-max` arm cannot run:
+   `omp --model kimi-code/k3 -p "..."` returns *"Use /login, set an API key..."*. `omp models`
+   lists `kimi-code/k3` with `max` support, so this is auth, not availability. Only the human
+   can fix it. If it stays unfixed, the plan already says the arm is reported as **not run**.
+
+## State at handoff
 
 | | |
 |---|---|
-| Tests | 68 passing (`uv run --with pytest python -m pytest tests/ -q`) |
-| Money spent on benchmarks | ~$0.02 — three Q1 config probes. No arm has been run; every driver is still dry-run verified only |
+| Tests | 78 passing as of the last run, BEFORE the three run.py fixes — re-run them |
+| Money spent | ~$0.02 (Q1 probes) + a handful of aborted-sweep invocations, roughly $0.05 total |
 | Anthropic quota spent | none |
+| Arm data | **none usable.** The one aborted sweep file must be deleted |
+
+### What the aborted sweep taught, and what it now costs
+
+Three silent harness bugs, all fixed, all written up in §11 of `docs/BENCHMARKS.md`: the work
+directory was named `work` (which makes CMake demand `work_test.cpp` and fails all 29 C++
+exercises regardless of model); the session-transcript glob matched nothing (every `tokens_in`
+and `cost_usd` recorded as 0, silently voiding the length-control gate); and nothing raised on
+either. `run.py` now aborts on the first real invocation reporting `tokens_in == 0`.
+
+**Corrected cost: ~$4.3 for the three deepseek arms, not ~$2.** Measured per-invocation cost
+from the aborted run's own transcripts is ~$0.007–0.009 × 534 invocations. Also measured:
+~250s per invocation, so at `--jobs 4` the deepseek sweep is roughly 9 hours of wall clock.
 
 Built earlier: `bench/arms/` (skill conditions incl. the token-matched placebo skill),
 `bench/aider_polyglot/` (driver + McNemar/Wilcoxon analysis + length-control gate),
@@ -113,8 +141,8 @@ All of it is in `analyze.py` (`wilson_ci`, `paired_diff_ci`, `tost_paired_binary
 `power_paired_tost`, `smallest_margin_for_power`, `report_equivalence`,
 `report_descriptives`), with `--equivalence` and `--descriptives` CLI modes and 15 tests in
 `tests/test_analyze_equivalence.py`. The margin was computed, not chosen by taste: 5pp is
-unreachable at n=178, so **15.0pp at α = 0.025** is registered. See §9 of
-`docs/BENCHMARKS.md` for the full table.
+unreachable at n=178, so **16.0pp at α = 0.0167** is registered (three Q3 comparisons after
+Amendment 1 added `kimi-max`). See §9 of `docs/BENCHMARKS.md` for the full table.
 Every existing guard is retained: the discordant-pair floor, the length-control gate (which
 applies to the `ds-jspace` vs `ds-placebo` pair only), the refusal to analyze without a
 parseable plan, and — new — the plan's discordance ceiling, enforced mechanically rather than
@@ -122,16 +150,30 @@ left to a reader.
 
 ## Order of work when resuming
 
-Q1 and steps 2–4 are done (see "State at handoff" and the Q1 section). What remains, in order,
-both items gated on authorisation because each spends money or quota:
+Q1 and all harness work are done. What remains, in order:
 
-1. **deepseek arms** (`ds-jspace`, `ds-plain`, `ds-placebo`), 178 exercises × 1 run, ~$2 cash,
-   no Anthropic quota. Dry-run first, confirm per-arm model/thinking in the JSONL.
-2. **Anthropic arms** (`opus-med`, `sonnet-med`), 178 invocations each of subscription quota.
-   Q3 needs both: Sonnet brackets where deepseek+J-Space lands. Same 178 `task_id`s as the
-   deepseek run, or pairing breaks.
-3. Analyze with `--descriptives` and `--equivalence ds-jspace opus-med --margin 15.0 --alpha
-   0.025` (and again vs `sonnet-med`), against `bench/PREREGISTRATION-MODELS.md`.
+0. **Free, and mandatory before anything paid.** Run the suite (`uv run --with pytest python -m
+   pytest tests/ -q`, expect 78), delete the contaminated results file, and commit the three
+   uncommitted `run.py` fixes.
+1. **Free.** Prove the C++ fix and the usage fix on real invocations — 2 exercises, one arm:
+   ```bash
+   python3 bench/aider_polyglot/run.py --arms ds-plain --runs 1 --exercises 2 --jobs 2 \
+     --out ~/Sites/temp-files/cpp-check.jsonl
+   ```
+   Costs ~$0.02. **Acceptance: `tokens_in` > 0 and `cost_usd` > 0 on every row, and no
+   `work_test.cpp` error in `notes`.** Do not proceed if either fails.
+2. **~$4.3 cash, no Anthropic quota.** The deepseek arms, ~9h at `--jobs 4`:
+   ```bash
+   python3 bench/aider_polyglot/run.py --arms ds-jspace,ds-plain,ds-placebo --runs 1 \
+     --jobs 4 --resume --out bench/results/aider_polyglot-ds-arms.jsonl
+   ```
+   **Read the first completed record before letting it run to the end** — that single habit is
+   what caught all three bugs in §11.
+3. **Quota.** `opus-med`, `sonnet-med`, and `kimi-max` if auth is fixed — 178 invocations each,
+   same 178 `task_id`s as the deepseek run or pairing breaks.
+4. Analyze against `bench/PREREGISTRATION-MODELS.md`: `--descriptives`, then
+   `--equivalence ds-jspace opus-med --margin 16.0 --alpha 0.0167`, and again for `sonnet-med`
+   and `kimi-max`.
 
 ## Standing constraint
 
