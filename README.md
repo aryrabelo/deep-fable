@@ -29,15 +29,18 @@ Every session starts by reading `skill://j-space` and operating under it, on `op
 
 ## Other coding agents
 
-The skill itself is agent-agnostic — no OMP-specific syntax anywhere in it. Two extra
-targets install today:
+The skill itself is agent-agnostic — no OMP-specific syntax anywhere in it. Every major
+coding agent installs today:
 
 ```bash
-./install.sh claude   # -> ~/.claude/skills/j-space
-./install.sh codex    # -> ~/.agents/skills/j-space
+./install.sh claude     # -> ~/.claude/skills/j-space
+./install.sh codex      # -> ~/.agents/skills/j-space
+./install.sh opencode   # -> ~/.config/opencode/skills/j-space
+./install.sh cursor     # -> ~/.cursor/skills/j-space
+./install.sh gemini     # -> ~/.gemini/skills/j-space   (no extension bundle needed)
 ```
 
-Neither adapter edits your config. They copy the skill and print the optional always-on
+No adapter edits your config. Each copies the skill and prints the optional always-on
 snippet for you to paste — model choice stays with your agent's own settings.
 
 | Agent | Status |
@@ -45,11 +48,13 @@ snippet for you to paste — model choice stays with your agent's own settings.
 | OMP | ✅ `./install.sh` |
 | Claude Code | ✅ `./install.sh claude` |
 | Codex CLI | ✅ `./install.sh codex` |
-| OpenCode · Cursor · Gemini CLI | 🔜 see [ROADMAP.md](ROADMAP.md) |
+| OpenCode | ✅ `./install.sh opencode` |
+| Cursor | ✅ `./install.sh cursor` |
+| Gemini CLI | ✅ `./install.sh gemini` |
 
-In-repo the skill lives once at `.omp/skills/j-space`; `.agents/skills/j-space` is a
-symlink to it, which Codex CLI and the OpenCode/Cursor compat paths read directly. Full
-support matrix, open questions, and where each remaining piece goes: [ROADMAP.md](ROADMAP.md).
+In-repo the skill lives once at `.omp/skills/j-space`; `.agents/skills/j-space` is a symlink
+to it, and that single path is read natively by OMP, Codex CLI, Cursor, and Gemini CLI. Full
+support matrix and the verified sources behind each install path: [ROADMAP.md](ROADMAP.md).
 
 ## Why DeepSeek
 
@@ -80,19 +85,20 @@ DeepSeek doesn't clearly lose. It clearly costs less. That's the whole case for 
 ```
 deep-fable/
 ├── README.md
-├── ROADMAP.md               # support matrix, open questions, where each piece goes
+├── ROADMAP.md               # support matrix, verified install paths with sources
 ├── LICENSE
 ├── .gitignore
-├── install.sh               # ./install.sh [omp|claude|codex]
+├── install.sh               # ./install.sh [omp|claude|codex|opencode|cursor|gemini]
 ├── profile/
 │   ├── config.yml           # modelRoles.default: deepseek-v4-flash-0731, defaultThinkingLevel: max
 │   └── APPEND_SYSTEM.md     # boot instruction: read skill://j-space, operate under it
 ├── .omp/skills/j-space/     # vendored J-Space Cognition Suite (Apache-2.0, see LICENSE)
-├── .agents/skills/j-space   # symlink -> .omp/skills/j-space (Codex / OpenCode / Cursor)
-├── adapters/                # per-agent installers (claude, codex)
+├── .agents/skills/j-space   # symlink -> .omp/skills/j-space (OMP / Codex / Cursor / Gemini)
+├── adapters/                # per-agent installers: claude, codex, opencode, cursor, gemini
 ├── .github/workflows/       # CI: pytest on push and pull_request
-├── model-eval/              # Round 1 + Round 3 benchmark harness, briefs, reports
-│   └── round3/
+├── model-eval/              # benchmark harness, briefs, reports (rounds 1, 3, 4)
+│   ├── round3/
+│   └── round4/
 ├── jspace-eval/             # J-Space-specific eval tasks and verifier
 ├── tests/                   # pytest for install.sh / adapters / repo hygiene
 └── docs/images/             # benchmark screenshots

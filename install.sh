@@ -7,8 +7,8 @@ set -euo pipefail
 TARGET="${1:-omp}"
 case "$TARGET" in
   omp) : ;;
-  claude|codex) exec "$(dirname "${BASH_SOURCE[0]}")/adapters/$TARGET/install.sh" ;;
-  *) echo "Unknown target: $TARGET (expected: omp, claude, codex)" >&2; exit 1 ;;
+  claude|codex|opencode|cursor|gemini) exec "$(dirname "${BASH_SOURCE[0]}")/adapters/$TARGET/install.sh" ;;
+  *) echo "Unknown target: $TARGET (expected: omp, claude, codex, opencode, cursor, gemini)" >&2; exit 1 ;;
 esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

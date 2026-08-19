@@ -1,8 +1,8 @@
 # Roadmap
 
-Where each remaining piece goes. Shipped rows are verified by `tests/`; `🔜` rows are
-scoped, researched, and unblocked — every question that was gating them is answered under
-"Verified items" below, with the install path each answer implies.
+Where each remaining piece goes. Every agent row below now ships an installer, verified by
+`tests/`. The questions that used to gate the last three are answered under "Verified
+items", with the install path each answer implies.
 
 ## Support matrix
 
@@ -11,14 +11,20 @@ scoped, researched, and unblocked — every question that was gating them is ans
 | OMP | `~/.omp/profiles/jspace/agent/skills/j-space` (copy) | `profile/APPEND_SYSTEM.md` | `profile/config.yml` | ✅ shipped — `./install.sh` |
 | Claude Code | `~/.claude/skills/j-space` | optional snippet for `~/.claude/CLAUDE.md` (printed, never written) | `~/.claude/settings.json` → `model` | ✅ adapter — `./install.sh claude` |
 | Codex CLI | `~/.agents/skills/j-space` | optional snippet for `~/.codex/AGENTS.md` (printed) | `~/.codex/config.toml` → `model` | ✅ adapter — `./install.sh codex` |
-| OpenCode | `~/.config/opencode/skills/j-space`, relocatable via `OPENCODE_CONFIG_DIR` | `AGENTS.md` snippet | `opencode.json` | 🔜 adapter — unblocked |
-| Cursor | `.cursor/skills/j-space` | rule file `.cursor/rules/j-space.mdc` with `alwaysApply: true` | global `~/.cursor/cli-config.json` only (never repo) | 🔜 adapter + rule file — unblocked |
-| Gemini CLI | `~/.agents/skills/j-space` or `~/.gemini/skills/j-space` — **no extension needed** | `GEMINI.md` / context file snippet | CLI settings | 🔜 plain adapter — unblocked |
+| OpenCode | `~/.config/opencode/skills/j-space`, relocatable via `OPENCODE_CONFIG_DIR` | `AGENTS.md` snippet (printed) | `opencode.json` | ✅ adapter — `./install.sh opencode` |
+| Cursor | `~/.cursor/skills/j-space` (also reads `~/.agents/skills/`) | rule `.cursor/rules/j-space.mdc` with `alwaysApply: true` (printed) | global `~/.cursor/cli-config.json` only, never repo | ✅ adapter — `./install.sh cursor` |
+| Gemini CLI | `~/.gemini/skills/j-space` (also reads `~/.agents/skills/`) — **no extension needed** | `GEMINI.md` snippet (printed) | Gemini CLI settings | ✅ adapter — `./install.sh gemini` |
 
 In-repo, the skill lives once at `.omp/skills/j-space` (canonical). `.agents/skills/j-space`
-is a committed relative symlink to it — read natively by OMP, Codex CLI, and the
-OpenCode/Cursor compat paths, with no duplicated content and no second copy in a session
+is a committed relative symlink to it — and that one path is read natively by OMP, Codex
+CLI, Cursor, and Gemini CLI, with no duplicated content and no second copy in a session
 (OMP dedups skills by realpath). Adapters copy from the canonical path, never the symlink.
+
+Adapter contract, identical for all five: destination overridable by env var
+(`CLAUDE_SKILLS_DIR`, `AGENTS_SKILLS_DIR`, `OPENCODE_CONFIG_DIR`, `CURSOR_SKILLS_DIR`,
+`GEMINI_SKILLS_DIR`), copy from the canonical skill with `cp -RL`, idempotent, and the
+always-on instruction is **printed for the user to paste — never written**. No adapter
+touches a user config file or a model setting.
 
 ## Verified items (closed 2026-08-19)
 
@@ -44,6 +50,16 @@ over `~/.cursor/agents/`.
 *Impact:* the adapter installs the skill and prints the rule; it must never claim a global
 model override. Pinning a model from the repo is possible only by routing work through a
 committed subagent file.
+
+**Cursor — skills load natively. ✅ (bonus finding, closed while building the adapter.)**
+This was the one path the research round never covered. `https://cursor.com/docs/skills`
+documents a "Skill directories" list: project `.agents/skills/` and `.cursor/skills/`,
+user-level `~/.agents/skills/` and `~/.cursor/skills/`, plus `.claude/skills/` and
+`.codex/skills/` compatibility paths. Cursor reads `SKILL.md` directories itself — not only
+through the Claude/Codex aliases.
+*Impact:* the adapter installs a plain skill directory (default `~/.cursor/skills/j-space`),
+and the committed `.agents/skills/` symlink in this repo is already on Cursor's project
+search path.
 
 **Codex CLI — the legacy `~/.codex/skills` path is still read, with no name-based
 precedence. ✅ YES.** The resolver pushes `$CODEX_HOME/skills` ("Deprecated user skills
