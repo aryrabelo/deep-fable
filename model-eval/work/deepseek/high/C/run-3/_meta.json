@@ -1,0 +1,1 @@
+{"ms":149630,"reply":"{\n  \"summary\": \"Fixed score_tier1's hit() in verify.py: alphabetic reject/expect aliases now matched with word-boundary regex instead of raw substring, so 'no' no longer false-traps on 'north'. Numeric exact-token matching preserved unchanged. Verified python3 verify.py exits 0, and ran ad-hoc regre"}

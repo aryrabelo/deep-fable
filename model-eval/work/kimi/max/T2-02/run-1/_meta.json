@@ -1,0 +1,1 @@
+{"ms":98092,"reply":"{\n  \"summary\": \"Fixed the three planted bugs in invoice.py (promo cap not applied, shipping tier order inverted, tax computed on raw subtotal instead of discounted amount). Ran python3 test_invoice.py -v: all 5 tests pass.\",\n  \"reply\": \"DONE 5\"\n}"}

@@ -1,0 +1,1 @@
+{"ms":187674,"reply":"{\n  \"status\": \"DONE\",\n  \"summary\": \"Added a `stats` subcommand to jspace.py that prints `verified=<n> open=<n> core=<n>` (verified checkpoint count, active open-question count, live core-entry count capped at 2). Registered via sub.add_parser(\\\"stats\\\", ...) and dispatched in main() alongside seam/r"}

@@ -1,0 +1,1 @@
+{"ms":127065,"reply":"{\n  \"summary\": \"Added check #7 to scripts/verify_suite.py in the run-1 directory: detects byte-identical **Pass:** drill lines duplicated across modules/*.md files, naming both offending files. Updated the docstring to document check 7. Verified pristine tree exits 0 and a temp-copy test with a dupl"}

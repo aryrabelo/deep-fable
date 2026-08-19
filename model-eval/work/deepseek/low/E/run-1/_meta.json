@@ -1,0 +1,1 @@
+{"ms":177183,"reply":"{\n  \"summary\": \"Added a `stats` subcommand to jspace.py per BRIEF.md, printing `verified=<n> open=<n> core=<n>` computed from the ledger (Verified count, Open count, live Core count capped at 2). Registered via argparse subparsers and dispatched in main(), following the existing seam/resume pattern."}

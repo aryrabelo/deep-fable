@@ -1,0 +1,1 @@
+{"ms":49199,"reply":"{\n  \"summary\": \"Fixed score_tier2() in verify.py: wrapped subprocess.run in try/except to catch subprocess.TimeoutExpired (returns 'TIMEOUT') and OSError (returns 'ERROR (...)'). Verified regression contract holds: missing test_cart.py returns '-', exit 0 returns 'PASS', nonzero exit returns 'FAIL ("}

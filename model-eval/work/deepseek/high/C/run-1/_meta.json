@@ -1,0 +1,1 @@
+{"ms":162639,"reply":"{\n  \"summary\": \"Fixed score_tier1's hit() in verify.py to match alphabetic aliases on word boundaries via re.search(rf\\\"\\\\b{re.escape(a)}\\\\b\\\", norm), keeping numeric aliases as exact-token matches. Verified: reject alias 'no' no longer false-TRAPs on 'north'; TRAP still fires when a reject alias ap"}

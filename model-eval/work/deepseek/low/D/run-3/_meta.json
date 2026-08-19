@@ -1,0 +1,1 @@
+{"ms":161422,"reply":"{\n  \"summary\": \"Implemented check #7 in scripts/verify_suite.py: detects byte-identical **Pass:** drill lines duplicated across modules/*.md, naming all offending files. Verified pristine tree exits 0, and an injected duplicate (broadcast.md's Pass line copied into capacity.md) exits 1 and names bot"}

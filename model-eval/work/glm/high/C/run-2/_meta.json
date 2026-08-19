@@ -1,0 +1,1 @@
+{"ms":168124,"reply":"{\n  \"summary\": \"Fixed score_tier1's hit() in verify.py so single-word alphabetic reject/expect aliases match on word boundaries (via token membership) instead of raw substring, while numeric aliases keep exact-token matching and multi-word phrase aliases (e.g. 'cannot be determined') keep substring "}

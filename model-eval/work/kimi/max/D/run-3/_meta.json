@@ -1,0 +1,1 @@
+{"ms":138037,"reply":"{\n  \"summary\": \"Added check #7 to scripts/verify_suite.py (duplicate byte-identical **Pass:** drill lines across modules/). Verified: pristine tree exits 0; a copy with a duplicated Pass line exits 1 and names both files (e.g. 'modules/introspection.md: duplicate **Pass:** drill line also found in m"}

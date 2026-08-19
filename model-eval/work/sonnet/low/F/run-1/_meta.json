@@ -1,0 +1,1 @@
+{"ms":143133,"reply":"{\n  \"summary\": \"Fixed score_tier2() in verify.py to catch subprocess.TimeoutExpired (returns \\\"TIMEOUT\\\") and OSError (returns \\\"ERROR (...)\\\") instead of propagating. Verified: py_compile succeeds; early-return for missing test_cart.py unchanged; normal PASS/FAIL behavior unchanged; TimeoutExpired "}

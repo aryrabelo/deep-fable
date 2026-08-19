@@ -1,0 +1,1 @@
+{"ms":178308,"reply":"{\n  \"summary\": \"Added `stats` subcommand to jspace.py per BRIEF.md. Registered subparser, dispatch in main(), and mode_stats() printing 'verified=<n> open=<n> core=<n>' (verified = len(book['Verified']), open = len(book['Open']), core = min(len(book['Core']), 2), matching the existing live/parked co"}

@@ -1,0 +1,1 @@
+{"ms":119846,"reply":"{\n  \"summary\": \"Fixed score_tier2() in verify.py to catch subprocess.TimeoutExpired (returns 'TIMEOUT') and OSError (returns string starting with 'ERROR') instead of letting them propagate. Preserved the (workdir / 'test_cart.py').exists() early return and normal PASS/FAIL behavior. Verified with 5 "}

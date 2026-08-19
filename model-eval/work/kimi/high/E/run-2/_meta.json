@@ -1,0 +1,1 @@
+{"ms":144286,"reply":"{\n  \"summary\": \"Implemented the `stats` subcommand in jspace.py per BRIEF.md, registered via argparse subparsers and dispatched in main(), following the existing subcommand pattern. It prints `verified=<n> open=<n> core=<n>` computed from len(book['Verified']), len(book['Open']), and min(len(book['C"}

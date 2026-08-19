@@ -1,0 +1,1 @@
+{"ms":106346,"reply":"{\n  \"status\": \"DONE\",\n  \"tests_passing\": 5,\n  \"summary\": \"Fixed 3 planted bugs in invoice.py: (1) discount_amount didn't cap promo_pct at MAX_PROMO_PCT, (2) shipping tier checks were in wrong order (>=40 checked before >=75, so exact 75 got 4.99 instead of free), (3) grand_total computed tax on raw "}

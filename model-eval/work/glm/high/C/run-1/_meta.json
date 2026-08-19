@@ -1,0 +1,1 @@
+{"ms":164914,"reply":"{\n  \"summary\": \"Fixed score_tier1's hit() in verify.py so single-token aliases (both numeric and alphabetic) match on word boundaries via the tokens list, while multi-word phrase aliases continue to match as substrings of the normalized text. Verified: (1) reject alias 'no' no longer false-triggers "}

@@ -1,0 +1,1 @@
+{"ms":141895,"reply":"{\n  \"summary\": \"Added a stats subcommand to jspace.py that prints 'verified=<n> open=<n> core=<n>' where n counts len(book['Verified']), len(book['Open']), and min(len(book['Core']), 2) (live core slots). Registered via sub.add_parser('stats', ...) and dispatched in main() alongside seam/resume, fol"}

@@ -1,0 +1,1 @@
+{"ms":150919,"reply":"{\n  \"status\": \"DONE\",\n  \"summary\": \"Added check #7 to scripts/verify_suite.py in model-eval/work/glm/max/D/run-2 detecting byte-identical '**Pass:**' drill lines across modules/ files, naming both files when a duplicate exists. Verified: pristine tree exits 0; a copy-pasted Pass line (tested in a te"}

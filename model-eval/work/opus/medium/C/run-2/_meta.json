@@ -1,0 +1,1 @@
+{"ms":144764,"reply":"{\n  \"summary\": \"Fixed score_tier1's hit() in verify.py: alphabetic reject aliases now match via word-boundary regex (re.search(rf\\\"\\\\b{re.escape(a)}\\\\b\\\", norm)) instead of raw substring search, while numeric aliases still use exact-token matching via `a in tokens`. Verified 'no' no longer false-tra"}

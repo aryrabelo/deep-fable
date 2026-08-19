@@ -1,0 +1,1 @@
+{"ms":166080,"reply":"{\n  \"summary\": \"Fixed score_tier1() in verify.py: alphabetic reject aliases now match via word-boundary regex (\\\\balias\\\\b) instead of raw substring, preventing false TRAP (e.g. reject alias 'no' no longer matches inside 'north'). Numeric aliases still use exact-token matching via the tokens list. V"}

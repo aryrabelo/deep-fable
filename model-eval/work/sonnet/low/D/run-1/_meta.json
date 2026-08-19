@@ -1,0 +1,1 @@
+{"ms":168615,"reply":"{\n  \"summary\": \"Added check #7 to scripts/verify_suite.py (no two modules/*.md share a byte-identical **Pass:** drill line, naming both files on collision), updated the docstring's numbered check list, and updated the clean-exit message. Verified: pristine tree exits 0; a temp copy with a duplicated"}

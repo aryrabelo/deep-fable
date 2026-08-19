@@ -1,0 +1,1 @@
+{"ms":149263,"reply":"{\n  \"summary\": \"Fixed score_tier1's hit() in verify.py so alphabetic aliases match on word boundaries (re.search with \\\\b...\\\\b) instead of raw substrings, while numeric aliases keep exact-token matching via the tokens list. Verified: 'no' no longer false-triggers TRAP on 'north' (now PASS), genuine"}

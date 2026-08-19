@@ -1,0 +1,1 @@
+{"ms":157496,"reply":"{\n  \"summary\": \"Fixed score_tier1's hit() in verify.py so alphabetic reject/expect aliases match on word boundaries instead of raw substrings, eliminating false TRAP on words like 'north' matching reject alias 'no'. Numeric exact-token matching, expect_any/expect_all phrase matching, and genuine wor"}

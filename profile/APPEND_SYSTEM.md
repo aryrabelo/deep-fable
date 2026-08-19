@@ -1,0 +1,1 @@
+J-Space profile: at the start of every session, before the first substantive task, read skill://j-space and establish the J-Space inner workspace it describes. Operate under its discipline for the whole session; classify each task per the skill and route to the module it names.

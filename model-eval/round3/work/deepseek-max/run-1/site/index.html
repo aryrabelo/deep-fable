@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>J-Space Cognition Suite V3.6 — Inference-Time Control for Deep Reasoning</title>
+<meta name="description" content="A model-agnostic, inference-time control system for deep reasoning, long-horizon work, tool use, verification, and recovery. Model weights and training remain unchanged.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-0:#05070c;
+    --bg-1:#0b0f1a;
+    --panel:#10141f;
+    --border:#232a3d;
+    --accent-1:#7dd3fc;
+    --accent-2:#a78bfa;
+    --good:#34d399;
+    --text:#c7cbd6;
+    --heading:#f4f5f8;
+    --muted:#7c8296;
+    --mono:'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    --sans:-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+    --display:'Space Grotesk', var(--sans);
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:linear-gradient(180deg, var(--bg-0) 0%, var(--bg-1) 100%);
+    color:var(--text);
+    font-family:var(--sans);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent-1); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  h1,h2,h3{font-family:var(--display); color:var(--heading); margin:0 0 .5em;}
+  code, .mono{font-family:var(--mono);}
+  .wrap{max-width:1120px; margin:0 auto; padding:0 24px;}
+  section{padding:88px 0;}
+  section + section{border-top:1px solid var(--border);}
+
+  /* ---- Hero ---- */
+  .hero{
+    position:relative;
+    min-height:92vh;
+    display:flex;
+    align-items:center;
+    overflow:hidden;
+    padding:120px 0 80px;
+  }
+  #hero-canvas{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    display:block;
+    z-index:0;
+  }
+  .hero-scrim{
+    position:absolute;
+    inset:0;
+    z-index:1;
+    background:linear-gradient(90deg, var(--bg-0) 0%, rgba(5,7,12,0.88) 38%, rgba(5,7,12,0.35) 58%, transparent 72%);
+    pointer-events:none;
+  }
+  .hero-inner{
+    position:relative;
+    z-index:2;
+    max-width:760px;
+  }
+  .eyebrow{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    font-family:var(--mono);
+    font-size:.8rem;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--accent-1);
+    background:rgba(125,211,252,0.08);
+    border:1px solid rgba(125,211,252,0.25);
+    padding:6px 12px;
+    border-radius:999px;
+    margin-bottom:24px;
+  }
+  .hero h1{
+    font-size:clamp(2.5rem, 6vw, 4.5rem);
+    line-height:1.05;
+    background:linear-gradient(120deg, var(--heading) 30%, var(--accent-1) 70%, var(--accent-2) 100%);
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+  }
+  .hero p.lede{
+    font-size:1.15rem;
+    color:var(--text);
+    max-width:620px;
+    margin:0 0 28px;
+  }
+  .hero .principle{
+    font-family:var(--mono);
+    font-size:.95rem;
+    color:var(--muted);
+    border-left:2px solid var(--accent-2);
+    padding-left:14px;
+    margin:0 0 32px;
+  }
+  .cta-row{display:flex; gap:14px; flex-wrap:wrap; margin-bottom:28px;}
+  .btn{
+    font-family:var(--display);
+    font-weight:600;
+    font-size:.95rem;
+    padding:12px 22px;
+    border-radius:8px;
+    display:inline-block;
+  }
+  .btn-primary{
+    background:linear-gradient(120deg, var(--accent-1), var(--accent-2));
+    color:#05070c;
+  }
+  .btn-primary:hover{text-decoration:none; filter:brightness(1.08);}
+  .btn-ghost{
+    border:1px solid var(--border);
+    color:var(--heading);
+  }
+  .btn-ghost:hover{text-decoration:none; border-color:var(--accent-1); color:var(--accent-1);}
+  .stat-row{display:flex; gap:28px; flex-wrap:wrap; font-family:var(--mono); font-size:.85rem; color:var(--muted);}
+  .stat-row strong{color:var(--heading); font-size:1rem;}
+
+  /* ---- Generic section styling ---- */
+  .kicker{
+    font-family:var(--mono);
+    font-size:.78rem;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--accent-2);
+    margin-bottom:10px;
+  }
+  section h2{font-size:clamp(1.6rem, 3vw, 2.2rem);}
+  section > .wrap > p.section-lede{color:var(--muted); max-width:680px; margin-bottom:40px;}
+
+  .card-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(230px, 1fr));
+    gap:16px;
+    margin-top:8px;
+  }
+  .card{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:22px;
+  }
+  .card h3{font-size:1.05rem; margin-bottom:8px;}
+  .card p{margin:0; font-size:.92rem; color:var(--muted);}
+  .card .tag{
+    font-family:var(--mono);
+    font-size:.72rem;
+    color:var(--accent-1);
+    text-transform:uppercase;
+    letter-spacing:.05em;
+    margin-bottom:10px;
+    display:block;
+  }
+
+  table{width:100%; border-collapse:collapse; margin-top:8px; font-size:.88rem;}
+  thead th{
+    text-align:right;
+    font-family:var(--mono);
+    font-weight:500;
+    color:var(--muted);
+    font-size:.75rem;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    padding:10px 12px;
+    border-bottom:1px solid var(--border);
+  }
+  thead th:first-child{text-align:left;}
+  tbody td{
+    padding:10px 12px;
+    text-align:right;
+    border-bottom:1px solid var(--border);
+    font-family:var(--mono);
+    color:var(--text);
+  }
+  tbody td:first-child{text-align:left; font-family:var(--sans); color:var(--heading);}
+  tbody tr:hover{background:rgba(125,211,252,0.04);}
+  td.up{color:var(--good); font-weight:600;}
+  .table-scroll{overflow-x:auto; border:1px solid var(--border); border-radius:12px; padding:4px 12px;}
+
+  .eff-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(220px,1fr));
+    gap:16px;
+    margin-top:28px;
+  }
+  .eff-card{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:24px;
+    text-align:center;
+  }
+  .eff-card .num{font-family:var(--display); font-size:2.2rem; color:var(--good); font-weight:700;}
+  .eff-card .label{font-size:.85rem; color:var(--muted); margin-top:4px;}
+  .caveat{
+    margin-top:24px;
+    font-size:.82rem;
+    color:var(--muted);
+    border-top:1px dashed var(--border);
+    padding-top:16px;
+  }
+
+  .steps{list-style:none; margin:0; padding:0; counter-reset:step;}
+  .steps li{
+    counter-increment:step;
+    position:relative;
+    padding:0 0 22px 44px;
+    border-left:1px solid var(--border);
+    margin-left:15px;
+  }
+  .steps li:last-child{border-color:transparent; padding-bottom:0;}
+  .steps li::before{
+    content:counter(step);
+    position:absolute;
+    left:-16px;
+    top:0;
+    width:30px;
+    height:30px;
+    border-radius:50%;
+    background:var(--bg-1);
+    border:1px solid var(--accent-1);
+    color:var(--accent-1);
+    font-family:var(--mono);
+    font-size:.85rem;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .steps h3{font-size:1rem; margin-bottom:4px;}
+  .steps p{margin:0; color:var(--muted); font-size:.9rem;}
+
+  pre{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:16px 18px;
+    overflow-x:auto;
+    font-family:var(--mono);
+    font-size:.85rem;
+    color:var(--accent-1);
+  }
+  pre .comment{color:var(--muted);}
+
+  .invoke-box{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:18px 20px;
+    font-family:var(--mono);
+    font-size:.85rem;
+    color:var(--text);
+    margin-top:18px;
+  }
+
+  .tree{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:22px 26px;
+    font-family:var(--mono);
+    font-size:.82rem;
+    color:var(--text);
+    overflow-x:auto;
+    white-space:pre;
+    line-height:1.7;
+  }
+  .tree .dir{color:var(--accent-1);}
+  .tree .comment{color:var(--muted);}
+
+  footer{
+    padding:56px 0 40px;
+    background:var(--bg-0);
+  }
+  .footer-grid{
+    display:grid;
+    grid-template-columns:2fr 1fr 1fr;
+    gap:32px;
+    margin-bottom:32px;
+  }
+  @media (max-width:720px){ .footer-grid{grid-template-columns:1fr;} }
+  footer h4{
+    font-family:var(--display);
+    color:var(--heading);
+    font-size:.9rem;
+    text-transform:uppercase;
+    letter-spacing:.05em;
+    margin-bottom:14px;
+  }
+  footer ul{list-style:none; margin:0; padding:0;}
+  footer li{margin-bottom:8px; font-size:.9rem;}
+  .footer-bottom{
+    border-top:1px solid var(--border);
+    padding-top:24px;
+    display:flex;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:12px;
+    font-size:.82rem;
+    color:var(--muted);
+    font-family:var(--mono);
+  }
+  .release-strip{
+    font-family:var(--mono);
+    font-size:.78rem;
+    color:var(--muted);
+    letter-spacing:.02em;
+  }
+</style>
+</head>
+<body>
+
+<section class="hero" id="top">
+  <canvas id="hero-canvas"></canvas>
+  <div class="hero-scrim"></div>
+  <div class="wrap hero-inner">
+    <span class="eyebrow">Apache-2.0 · 2,547 ★ · 165 forks</span>
+    <h1>J-Space Cognition Suite V3.6</h1>
+    <p class="lede">
+      A model-agnostic, inference-time control system for deep reasoning, long-horizon work,
+      tool use, verification, and recovery. It operates entirely at inference time —
+      model weights and training remain unchanged.
+    </p>
+    <p class="principle">
+      "Dense on the inside, decodable on demand, clean on the outside." Use only the
+      machinery the task earns.
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/Tiger3807861189/J-Space-Cognition-Suite-V3.6">View on GitHub</a>
+      <a class="btn btn-ghost" href="https://zenodo.org/records/22004675">Zenodo record (v3.6.1)</a>
+      <a class="btn btn-ghost" href="#benchmarks">See benchmarks</a>
+    </div>
+    <div class="stat-row">
+      <span><strong>9</strong> selectively-loaded modules</span>
+      <span><strong>3</strong> supporting references</span>
+      <span><strong>1</strong> optional stdlib controller</span>
+      <span><strong>29</strong> open issues</span>
+    </div>
+  </div>
+</section>
+
+<section id="how-it-works">
+  <div class="wrap">
+    <div class="kicker">How it works</div>
+    <h2>Three passes, loaded only when the task earns them</h2>
+    <p class="section-lede">
+      A single entry gate auto-selects the lightest pass suitable for the request. A request
+      for brevity shortens the outer response — it does not lower verification below the
+      task's floor.
+    </p>
+    <div class="card-grid">
+      <div class="card">
+        <span class="tag">Pass · fast</span>
+        <h3>One step, checkable in a glance</h3>
+        <p>Nothing extra loads. The entry gate keeps overhead at zero for trivial requests.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Pass · full</span>
+        <h3>Several dependent steps, one bounded deliverable</h3>
+        <p>One or two relevant modules load; the <code>ship</code> check runs before delivery.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Pass · loop</span>
+        <h3>Multiple stages, files, turns, tools, or persistent state</h3>
+        <p>Ledger, seams, checkpoints, register audit, and recovery all become active.</p>
+      </div>
+    </div>
+
+    <h2 style="margin-top:56px;">Seven core mechanisms</h2>
+    <div class="card-grid">
+      <div class="card"><h3>Selective workspace loading</h3><p>Keeps one or two load-bearing ideas active and externalizes the rest.</p></div>
+      <div class="card"><h3>Broadcast hub</h3><p>Gives dependent branches one shared source for names, values, constraints, and style anchors.</p></div>
+      <div class="card"><h3>Dense Track</h3><p>Carries long internal chains in compact, decodable notation before returning to clean outer language.</p></div>
+      <div class="card"><h3>Bridge-before-conclusion reasoning</h3><p>Makes required intermediates explicit before a conclusion consumes them.</p></div>
+      <div class="card"><h3>Metacognitive control</h3><p>Routes confidence, inconsistency, and failure signals into a concrete next action.</p></div>
+      <div class="card"><h3>Empirical escape &amp; verification</h3><p>Converts stalled derivation into bounded tests with a named verifier and coverage.</p></div>
+      <div class="card"><h3>First-person agency &amp; functional echo</h3><p>Uses "I", "we", "let's", "we need" to bind workspace state to later actions and checks.</p></div>
+    </div>
+
+    <h2 style="margin-top:56px;">Optional controller — <code>jspace.py</code></h2>
+    <p class="section-lede" style="margin-bottom:16px;">
+      Externalizes <code>loop</code>-pass state into a <code>.jspace/</code> directory inside
+      the current task workspace, using the Python standard library only. The controller
+      records and reports state — solution choice remains with the model.
+    </p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Command</th><th style="text-align:left;">Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><code>note --goal / --next</code></td><td style="text-align:left; font-family:var(--sans); color:var(--text);">Open the ledger and define done plus the first action</td></tr>
+          <tr><td><code>note --core</code></td><td style="text-align:left; font-family:var(--sans); color:var(--text);">Record a hub entry (or swap one with <code>--core-slot</code>)</td></tr>
+          <tr><td><code>note --check / --by</code></td><td style="text-align:left; font-family:var(--sans); color:var(--text);">Append a checkpoint with verifier and coverage</td></tr>
+          <tr><td><code>note --open / --settled-by</code></td><td style="text-align:left; font-family:var(--sans); color:var(--text);">Record a question and what would settle it</td></tr>
+          <tr><td><code>seam</code></td><td style="text-align:left; font-family:var(--sans); color:var(--text);">Re-read current state and report recent movement</td></tr>
+          <tr><td><code>ship FILE</code></td><td style="text-align:left; font-family:var(--sans); color:var(--text);">Inspect outgoing text for register leakage and failure signatures</td></tr>
+          <tr><td><code>resume</code></td><td style="text-align:left; font-family:var(--sans); color:var(--text);">Reload the premise, invariants, and full ledger after a long gap</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="benchmarks">
+  <div class="wrap">
+    <div class="kicker">Benchmark highlights</div>
+    <h2>DeepSeek V4-Flash-0731, with and without J-Space V3.6</h2>
+    <p class="section-lede">
+      Project-level records, native benchmark scores, higher is better. Evaluated with the
+      official DeepSeek Harness minimal-mode setup, <code>max</code> reasoning effort,
+      <code>temperature = 1.0</code>, <code>top_p = 0.95</code>. Comparator columns retain
+      each provider's own published evaluation context.
+    </p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>V4-Flash-0731</th>
+            <th>+ J-Space V3.6</th>
+            <th>GLM-5.3</th>
+            <th>Kimi-K3</th>
+            <th>Opus-4.8</th>
+            <th>Fable 5 (fallback)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>HLE (w/o tools)</td><td>37.8</td><td class="up">45.5</td><td>—</td><td>43.5</td><td>49.8</td><td>53.3</td></tr>
+          <tr><td>HLE (w/ tools)</td><td>51.5</td><td class="up">60.6</td><td>62.5</td><td>56.0</td><td>57.9</td><td>63.0</td></tr>
+          <tr><td>Terminal Bench 2.1</td><td>82.7</td><td class="up">87.1</td><td>88.2</td><td>88.3</td><td>85.0</td><td>88.0</td></tr>
+          <tr><td>NL2Repo</td><td>54.2</td><td class="up">70.2</td><td>58.0</td><td>58.0</td><td>69.7</td><td>—</td></tr>
+          <tr><td>CyberGym</td><td>76.7</td><td class="up">81.7</td><td>84.5</td><td>80.0</td><td>78.3</td><td>83.1</td></tr>
+          <tr><td>DeepSWE</td><td>54.4</td><td class="up">67.4</td><td>66.9</td><td>67.5</td><td>58.0</td><td>70.0</td></tr>
+          <tr><td>Toolathlon-Verified</td><td>70.3</td><td class="up">77.7</td><td>73.0</td><td>76.5</td><td>76.2</td><td>77.9</td></tr>
+          <tr><td>Agents' Last Exam</td><td>25.2</td><td class="up">30.1</td><td>28.5</td><td>27.6</td><td>25.7</td><td>23.8</td></tr>
+          <tr><td>AutomationBench (Public)</td><td>25.1</td><td class="up">31.7</td><td>48.2</td><td>30.8</td><td>27.2</td><td>29.1</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="eff-grid">
+      <div class="eff-card">
+        <div class="num">2.53×</div>
+        <div class="label">Speed (score / time) vs. control</div>
+      </div>
+      <div class="eff-card">
+        <div class="num">2.21×</div>
+        <div class="label">Lower token cost (tokens / score) vs. control</div>
+      </div>
+    </div>
+
+    <p class="caveat">
+      These are the project's own records from its available evaluation environment, not an
+      independently audited benchmark. Hardware conditions, process isolation, tool
+      availability, and information-access boundaries are part of that context, and score
+      variation across environments and harness configurations is expected.
+    </p>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <div class="kicker">Install &amp; usage</div>
+    <h2>Manual install (Option A)</h2>
+    <ol class="steps">
+      <li><h3>Get the repo</h3><p>Download or clone <code>J-Space-Cognition-Suite-V3.6</code>.</p></li>
+      <li><h3>Locate the Skills directory</h3><p>Find the user-level Skills directory used by your AI host.</p></li>
+      <li><h3>Copy <code>j-space/</code> in</h3><p>So the installed entry is <code>&lt;skills-directory&gt;/j-space/SKILL.md</code>. The directory must stay intact — <code>SKILL.md</code> routes to relative paths under <code>modules/</code>, <code>references/</code>, and <code>scripts/</code>.</p></li>
+      <li><h3>Run the integrity check</h3><p>With any available Python 3 interpreter (<code>python</code>, <code>python3</code>, or <code>py -3</code>).</p></li>
+      <li><h3>Reload the host</h3><p>If it discovers Skills at startup. Keep <code>LICENSE</code> and <code>THIRD_PARTY_NOTICES.md</code> with any redistribution.</p></li>
+    </ol>
+
+    <pre><span class="comment"># integrity check</span>
+&lt;python-command&gt; &lt;skills-directory&gt;/j-space/scripts/verify_suite.py
+
+<span class="comment"># maintainer verification, from repo root</span>
+&lt;python-command&gt; j-space/scripts/verify_suite.py
+&lt;python-command&gt; -m unittest discover -s tests -v</pre>
+
+    <h2 style="margin-top:48px;">Invoke it</h2>
+    <p class="section-lede" style="margin-bottom:0;">
+      Through the mechanism your host provides — its Skill picker, <code>/j-space</code>,
+      <code>$j-space</code>, or a direct request. The entry gate selects the lightest
+      suitable pass automatically.
+    </p>
+    <div class="invoke-box">
+      "Use j-space for this task. Audit this repository, preserve its architecture, verify
+      every finding, and keep the work consistent across all affected files."
+    </div>
+  </div>
+</section>
+
+<section id="structure">
+  <div class="wrap">
+    <div class="kicker">Project structure</div>
+    <h2>One entry, nine modules, three references</h2>
+    <div class="tree">J-Space-Cognition-Suite-V3.6/
+├── <span class="comment">.github/workflows/verify.yml    # three-platform integrity and regression checks</span>
+├── CITATION.cff                    <span class="comment"># machine-readable citation metadata</span>
+├── LICENSE                         <span class="comment"># Apache License 2.0</span>
+├── README.md / README.zh-CN.md     <span class="comment"># engineering guides</span>
+├── THIRD_PARTY_NOTICES.md
+├── tests/test_jspace.py            <span class="comment"># stdlib controller regression tests</span>
+└── <span class="dir">j-space/</span>
+    ├── SKILL.md                    <span class="comment"># single entry, gate, routing, invariants</span>
+    ├── <span class="dir">modules/</span>                    <span class="comment"># nine selectively loaded protocols</span>
+    │   ├── broadcast.md         ├── directed-focus.md   ├── markers.md
+    │   ├── capacity.md          ├── empirics.md         ├── self-monitoring.md
+    │   ├── deep-reasoning.md    ├── introspection.md    └── shorthand.md
+    ├── <span class="dir">references/</span>                 <span class="comment"># evidence, induction, worked exemplars</span>
+    │   ├── exemplars.md
+    │   ├── induction-playbook.md
+    │   └── j-space-science.md
+    └── <span class="dir">scripts/</span>
+        ├── jspace.py            <span class="comment"># optional loop controller</span>
+        ├── workspace-ledger.md  <span class="comment"># ledger template and contract</span>
+        └── verify_suite.py      <span class="comment"># authoring-time integrity check</span></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <h4>J-Space Cognition Suite</h4>
+        <p style="color:var(--muted); font-size:.9rem; max-width:420px;">
+          Uses the operational workspace terminology from Anthropic's related interpretability
+          research; first-person language is treated as control grammar bound to explicit
+          actions, checks, and settles. Reproduced effects reported across DeepSeek, Qwen,
+          GLM, GPT, and Claude model families, with effect size varying by base capability,
+          context policy, tool harness, and benchmark implementation.
+        </p>
+        <p class="release-strip" style="margin-top:14px;">V1 → V1.5 → V1.8 → V2 → V2.5 → V2.6 → V3 → V3.1 → V3.2 → V3.5 → V3.5Turbo → V3.6</p>
+      </div>
+      <div>
+        <h4>License</h4>
+        <ul>
+          <li>Apache License 2.0</li>
+          <li>Third-party notices tracked separately</li>
+          <li>Author: Tiger3807861189</li>
+        </ul>
+      </div>
+      <div>
+        <h4>Links</h4>
+        <ul>
+          <li><a href="https://github.com/Tiger3807861189/J-Space-Cognition-Suite-V3.6">GitHub repository</a></li>
+          <li><a href="https://github.com/Tiger3807861189/DeepSeek-V4-J-Space-Capability-Realization-Report">Capability realization report</a></li>
+          <li><a href="https://zenodo.org/records/22004675">Zenodo DOI record (v3.6.1)</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© Tiger3807861189 — Apache-2.0</span>
+      <span>10.5281/zenodo.22004675</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script>
+(function(){
+  var canvas = document.getElementById('hero-canvas');
+  var hero = document.querySelector('.hero');
+
+  function size(){
+    return { w: hero.clientWidth, h: hero.clientHeight };
+  }
+
+  var scene = new THREE.Scene();
+  var dims = size();
+  var camera = new THREE.PerspectiveCamera(55, dims.w / dims.h, 0.1, 100);
+  camera.position.set(0, 0, 9);
+
+  // rig holds the broadcast-hub visual, offset right so it clears the hero text column
+  var rig = new THREE.Group();
+  rig.position.x = 2.6;
+  scene.add(rig);
+
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(dims.w, dims.h);
+
+  // --- broadcast-hub nucleus ---
+  var nucleusGeo = new THREE.IcosahedronGeometry(0.55, 2);
+  var nucleusMat = new THREE.MeshBasicMaterial({ color: 0x9db4ff, wireframe: true, transparent: true, opacity: 0.85 });
+  var nucleus = new THREE.Mesh(nucleusGeo, nucleusMat);
+  rig.add(nucleus);
+
+  var glowGeo = new THREE.IcosahedronGeometry(0.75, 1);
+  var glowMat = new THREE.MeshBasicMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.08 });
+  var glow = new THREE.Mesh(glowGeo, glowMat);
+  rig.add(glow);
+
+  // --- orbiting module nodes (9 = nine selectively loaded modules) ---
+  var NODE_COUNT = 9;
+  var nodePositions = [];
+  var nodeGeo = new THREE.BufferGeometry();
+  var posArray = new Float32Array(NODE_COUNT * 3);
+  var radii = [];
+  var speeds = [];
+  var phases = [];
+
+  for (var i = 0; i < NODE_COUNT; i++) {
+    var radius = 2.6 + Math.random() * 2.0;
+    var theta = Math.random() * Math.PI * 2;
+    var phi = Math.acos((Math.random() * 2) - 1);
+    radii.push(radius);
+    speeds.push(0.08 + Math.random() * 0.12);
+    phases.push(theta);
+    var x = radius * Math.sin(phi) * Math.cos(theta);
+    var y = radius * Math.sin(phi) * Math.sin(theta) * 0.6;
+    var z = radius * Math.cos(phi) * 0.6;
+    posArray[i * 3] = x;
+    posArray[i * 3 + 1] = y;
+    posArray[i * 3 + 2] = z;
+    nodePositions.push({ radius: radius, phase: theta, yTilt: y / radius, zTilt: z / radius });
+  }
+  nodeGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+  var nodeMat = new THREE.PointsMaterial({ color: 0xa78bfa, size: 0.14, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
+  var nodePoints = new THREE.Points(nodeGeo, nodeMat);
+  rig.add(nodePoints);
+
+  // background scatter for depth
+  var BG_COUNT = 260;
+  var bgGeo = new THREE.BufferGeometry();
+  var bgArray = new Float32Array(BG_COUNT * 3);
+  for (var b = 0; b < BG_COUNT; b++) {
+    bgArray[b * 3] = (Math.random() - 0.5) * 24;
+    bgArray[b * 3 + 1] = (Math.random() - 0.5) * 16;
+    bgArray[b * 3 + 2] = (Math.random() - 0.5) * 14 - 4;
+  }
+  bgGeo.setAttribute('position', new THREE.BufferAttribute(bgArray, 3));
+  var bgMat = new THREE.PointsMaterial({ color: 0x334066, size: 0.05, transparent: true, opacity: 0.55 });
+  scene.add(new THREE.Points(bgGeo, bgMat));
+
+  // --- broadcast lines: nucleus -> nearest few nodes, recomputed each frame ---
+  var maxLines = NODE_COUNT;
+  var lineGeo = new THREE.BufferGeometry();
+  var linePositions = new Float32Array(maxLines * 2 * 3);
+  lineGeo.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
+  var lineMat = new THREE.LineBasicMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.28 });
+  var lines = new THREE.LineSegments(lineGeo, lineMat);
+  rig.add(lines);
+
+  var pointer = { x: 0, y: 0, targetX: 0, targetY: 0 };
+
+  function onPointerMove(e){
+    var rect = hero.getBoundingClientRect();
+    var px = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    var py = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+    pointer.targetX = px;
+    pointer.targetY = py;
+  }
+  window.addEventListener('pointermove', onPointerMove, { passive: true });
+
+  function onResize(){
+    var d = size();
+    if (d.w === 0 || d.h === 0) return;
+    camera.aspect = d.w / d.h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(d.w, d.h);
+  }
+  window.addEventListener('resize', onResize);
+
+  var clock = new THREE.Clock();
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function animate(){
+    requestAnimationFrame(animate);
+    var t = clock.getElapsedTime();
+    var speedScale = reduceMotion ? 0.15 : 1.0;
+
+    // pointer-driven lean (directed focus)
+    pointer.x += (pointer.targetX - pointer.x) * 0.04;
+    pointer.y += (pointer.targetY - pointer.y) * 0.04;
+
+    nucleus.rotation.y = t * 0.35 * speedScale + pointer.x * 0.6;
+    nucleus.rotation.x = t * 0.2 * speedScale + pointer.y * 0.4;
+    glow.rotation.y = -t * 0.15 * speedScale;
+    var pulse = 1 + Math.sin(t * 1.4) * 0.05;
+    glow.scale.setScalar(pulse);
+
+    camera.position.x += (pointer.x * 1.1 - camera.position.x) * 0.03;
+    camera.position.y += (pointer.y * 0.7 - camera.position.y) * 0.03;
+    camera.lookAt(0, 0, 0);
+
+    // orbit nodes independently over time
+    var posAttr = nodeGeo.getAttribute('position');
+    for (var i = 0; i < NODE_COUNT; i++) {
+      var n = nodePositions[i];
+      var ang = n.phase + t * speeds[i] * speedScale;
+      var x = n.radius * Math.cos(ang);
+      var z = n.radius * Math.sin(ang) * n.zTilt * 1.6 - 1;
+      var y = n.radius * n.yTilt + Math.sin(t * 0.6 + i) * 0.25;
+      posAttr.setXYZ(i, x, y, z);
+    }
+    posAttr.needsUpdate = true;
+
+    // redraw broadcast lines from nucleus to each node
+    var lp = lineGeo.getAttribute('position');
+    for (var j = 0; j < NODE_COUNT; j++) {
+      var nx = posAttr.getX(j), ny = posAttr.getY(j), nz = posAttr.getZ(j);
+      lp.setXYZ(j * 2, 0, 0, 0);
+      lp.setXYZ(j * 2 + 1, nx, ny, nz);
+    }
+    lp.needsUpdate = true;
+
+    renderer.render(scene, camera);
+  }
+
+  onResize();
+  animate();
+})();
+</script>
+</body>
+</html>

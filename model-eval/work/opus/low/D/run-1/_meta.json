@@ -1,0 +1,1 @@
+{"ms":193072,"reply":"{\n  \"summary\": \"Added check #7 to scripts/verify_suite.py: flags byte-identical **Pass:** drill lines duplicated across modules/*.md files, naming both files in the finding. Documented in the module docstring. Verified pristine tree exits 0 and an injected duplicate exits 1 naming both files (tested"}

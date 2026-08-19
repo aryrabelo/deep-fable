@@ -1,0 +1,1 @@
+{"ms":96324,"reply":"{\n  \"status\": \"DONE\",\n  \"tests_passing\": 4,\n  \"summary\": \"Fixed two planted bugs in cart.py: discount threshold changed from `sub > 60` to `sub >= 60` (inclusive), and shipping now computed on the discounted amount paid (`sub - disc`) instead of raw subtotal. Ran python3 test_cart.py -v: all 4 tests"}

@@ -1,0 +1,1 @@
+{"ms":151555,"reply":"{\n  \"summary\": \"Added the `stats` subcommand to jspace.py per BRIEF.md, following the existing subcommand pattern (mode_stats function, registered subparser, dispatched in main). It prints `verified=<n> open=<n> core=<n>` computed from len(book[\\\"Verified\\\"]), len(book[\\\"Open\\\"]), and len(book[\\\"Cor"}

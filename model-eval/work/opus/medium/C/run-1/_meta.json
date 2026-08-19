@@ -1,0 +1,1 @@
+{"ms":170403,"reply":"{\n  \"summary\": \"Fixed the reject-alias substring bug in verify.py's score_tier1/hit(). Alphabetic (and phrase) reject aliases now match on word boundaries via a new word_boundary parameter, while numeric aliases still match as exact tokens and expect_any/expect_all keep their substring/phrase matchi"}

@@ -1,0 +1,1 @@
+{"ms":64328,"reply":"{\n  \"summary\": \"Fixed score_tier2() in verify.py to catch subprocess.TimeoutExpired (returns \\\"TIMEOUT\\\") and OSError (returns \\\"ERROR (...)\\\") instead of letting them propagate. Regression contract preserved: exit 0 -> PASS, non-zero -> FAIL (...), and the test_cart.py existence early-return unchan"}

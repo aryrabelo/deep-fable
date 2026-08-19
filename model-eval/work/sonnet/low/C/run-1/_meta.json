@@ -1,0 +1,1 @@
+{"ms":181648,"reply":"{\n  \"summary\": \"Fixed the reject-alias substring bug in verify.py's score_tier1(). Alphabetic aliases now match on word boundaries via re.search(rf\\\"\\\\b{re.escape(a)}\\\\b\\\", norm) instead of raw substring `in norm`, so a reject alias like 'no' no longer false-triggers TRAP on 'north'. Numeric aliases"}

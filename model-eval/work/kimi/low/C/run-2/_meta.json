@@ -1,0 +1,1 @@
+{"ms":147338,"reply":"{\n  \"summary\": \"Fixed score_tier1's hit() in verify.py so single-token aliases (numeric or alphabetic) match as whole tokens instead of raw substrings, while multi-word expect_any/expect_all phrase aliases still match as substrings. Verified: 'no' no longer false-TRAPs on 'north', genuine 'no' still"}

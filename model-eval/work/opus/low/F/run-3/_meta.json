@@ -1,0 +1,1 @@
+{"ms":65105,"reply":"{\n  \"status\": \"DONE\",\n  \"summary\": \"Fixed score_tier2() in verify.py to catch subprocess.TimeoutExpired (returns \\\"TIMEOUT\\\") and OSError (returns \\\"ERROR (...)\\\") instead of raising. Verified: exists-check early return, PASS, FAIL, TIMEOUT, and ERROR cases all pass; stdlib-only imports preserved.\"\n"}

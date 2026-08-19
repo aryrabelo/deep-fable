@@ -1,0 +1,1 @@
+{"ms":157301,"reply":"{\n  \"summary\": \"Added check #7 to scripts/verify_suite.py: no two files under modules/ may contain a byte-identical **Pass:** drill line. Follows existing style (fail() calls, MODULES iteration), docstring updated to list check 7, all prior checks (1-6) untouched. Verified: pristine tree -> exit 0; "}

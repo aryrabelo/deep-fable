@@ -1,0 +1,1 @@
+{"ms":137498,"reply":"{\n  \"summary\": \"Fixed the three planted bugs in invoice.py per BRIEF.md and verified test_invoice.py passes.\",\n  \"bugs_fixed\": [\n    \"discount_amount() did not cap promo_pct at MAX_PROMO_PCT — added min(promo_pct, MAX_PROMO_PCT)\",\n    \"shipping() checked the >=40 tier before the >=75 tier, so orders"}

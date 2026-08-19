@@ -1,0 +1,1 @@
+{"ms":159385,"reply":"{\n  \"summary\": \"Implemented check #7 in verify_suite.py: no two modules/*.md files may share a byte-identical **Pass:** drill line. Docstring updated to document it. Verified pristine tree exits 0, and a duplicated **Pass:** line across two modules causes exit 1 naming both files.\"\n}"}

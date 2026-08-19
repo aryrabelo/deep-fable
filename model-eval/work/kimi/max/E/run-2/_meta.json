@@ -1,0 +1,1 @@
+{"ms":140096,"reply":"{\n  \"summary\": \"Added `stats` subcommand to jspace.py per BRIEF.md. It prints `verified=<n> open=<n> core=<n>` (verified = len of Verified list, open = len of live Open list, core = min(len(Core), 2) live slots), exits 0 always, including with no .jspace/ state. Verified via subprocess runs in a fre"}

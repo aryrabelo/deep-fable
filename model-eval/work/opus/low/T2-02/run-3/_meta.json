@@ -1,0 +1,1 @@
+{"ms":123276,"reply":"{\n  \"summary\": \"Fixed three planted bugs in invoice.py: (1) discount_amount() now caps promo_pct at MAX_PROMO_PCT before applying it, (2) shipping() tier checks reordered to test >=75 (free) before >=40 (4.99) so the free tier is reachable, (3) grand_total() now computes tax on the discounted amount"}
