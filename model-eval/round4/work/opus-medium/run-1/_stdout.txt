@@ -1,0 +1,7 @@
+Working...
+DONE
+
+Structural check passed: 4 sections, all six fields each, ≥2 distinct fetched URLs per section, no placeholders.
+
+## NEXT ACTION
+`[DONE]` — `ANSWERS.md` complete and verified; todos closed.
