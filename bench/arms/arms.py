@@ -20,9 +20,10 @@ Five more arms pin model and thinking explicitly, to compare models rather
 than just skill conditions (see bench/RESUME.md): "ds-jspace" / "ds-plain" /
 "ds-placebo" run deepseek-v4-flash-0731 at thinking "max" with each skill
 condition; "opus-med" and "sonnet-med" run claude-opus-5 / claude-sonnet-5
-at thinking "medium" with no skill. Each still resolves its prompt/skill-dir
-via the same "jspace"/"none"/"placebo" skill vocabulary as the original
-three — see ArmSpec.skill and arm_spec().
+at thinking "medium" with no skill; "kimi-max" runs kimi-code/k3 at thinking
+"max" with no skill, a second non-Anthropic reference point for Q2/Q3. Each
+still resolves its prompt/skill-dir via the same "jspace"/"none"/"placebo"
+skill vocabulary as the original three — see ArmSpec.skill and arm_spec().
 
 Stdlib only, no repo-level dependency file needed.
 """
@@ -57,8 +58,9 @@ class ArmSpec:
 _DEEPSEEK_MODEL = "openrouter/deepseek/deepseek-v4-flash-0731"
 _OPUS_MODEL = "anthropic/claude-opus-5"
 _SONNET_MODEL = "anthropic/claude-sonnet-5"
+_KIMI_MODEL = "kimi-code/k3"
 
-ALL_ARMS = ARMS + ("ds-jspace", "ds-plain", "ds-placebo", "opus-med", "sonnet-med")
+ALL_ARMS = ARMS + ("ds-jspace", "ds-plain", "ds-placebo", "opus-med", "sonnet-med", "kimi-max")
 
 ARM_SPECS: dict[str, ArmSpec] = {
     "jspace": ArmSpec("jspace", None, None, "jspace"),
@@ -69,6 +71,7 @@ ARM_SPECS: dict[str, ArmSpec] = {
     "ds-placebo": ArmSpec("ds-placebo", _DEEPSEEK_MODEL, "max", "placebo"),
     "opus-med": ArmSpec("opus-med", _OPUS_MODEL, "medium", "none"),
     "sonnet-med": ArmSpec("sonnet-med", _SONNET_MODEL, "medium", "none"),
+    "kimi-max": ArmSpec("kimi-max", _KIMI_MODEL, "max", "none"),
 }
 
 

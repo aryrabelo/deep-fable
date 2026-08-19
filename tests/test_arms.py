@@ -95,7 +95,7 @@ def test_arms_tuple_is_exactly_the_contract():
 def test_all_arms_exact_contents():
     assert ALL_ARMS == (
         "jspace", "none", "placebo",
-        "ds-jspace", "ds-plain", "ds-placebo", "opus-med", "sonnet-med",
+        "ds-jspace", "ds-plain", "ds-placebo", "opus-med", "sonnet-med", "kimi-max",
     )
 
 
@@ -103,6 +103,7 @@ def test_arm_specs_match_the_resume_table():
     deepseek = "openrouter/deepseek/deepseek-v4-flash-0731"
     opus = "anthropic/claude-opus-5"
     sonnet = "anthropic/claude-sonnet-5"
+    kimi = "kimi-code/k3"
     expected = {
         "jspace": (None, None, "jspace"),
         "none": (None, None, "none"),
@@ -112,11 +113,17 @@ def test_arm_specs_match_the_resume_table():
         "ds-placebo": (deepseek, "max", "placebo"),
         "opus-med": (opus, "medium", "none"),
         "sonnet-med": (sonnet, "medium", "none"),
+        "kimi-max": (kimi, "max", "none"),
     }
     assert set(ARM_SPECS) == set(ALL_ARMS)
     for name, (model, thinking, skill) in expected.items():
         spec = ARM_SPECS[name]
         assert (spec.model, spec.thinking, spec.skill) == (model, thinking, skill), name
+
+
+def test_kimi_max_prompt_is_empty_and_skill_dir_is_none():
+    assert arm_prompt("kimi-max") == ""
+    assert skill_dir("kimi-max") is None
 
 
 def test_arm_spec_rejects_unknown_name():

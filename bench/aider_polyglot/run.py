@@ -47,12 +47,23 @@ Ground truth (verified by reading the real repo, not guessed):
                 (the generated CMakeLists.txt wires a CTest-free `ALL` target
                 that both builds and executes the Catch2 binary, so `make`
                 alone is pass/fail)
-
 Every (exercise, arm, run) triple executes in its own scratch copy under
 bench/aider_polyglot/.scratch/ so the three arms never contaminate each
 other, and the copy excludes .meta/.docs/.approaches so the agent can never
 read the reference solution or already know it's part of a graded exercise
 via those directories.
+
+Resume and concurrency (`--resume`, `--jobs`): the sweep is long and not
+free, so both are opt-in and additive over the default sequential,
+from-scratch behaviour. `--resume` re-reads an existing `--out` JSONL and
+skips any (task_id, arm, run_idx) unit already recorded there — see
+load_completed() for exactly what counts as done. `--jobs N` runs N units
+concurrently through a thread pool (the work is subprocess-bound, so
+threads are correct and multiprocessing is unnecessary); JSONL writes are
+serialised and flushed per record so a `kill -9` mid-sweep leaves a valid,
+resumable partial file. `--jobs` > 1 risks tripping provider rate limits
+and running multiple languages' test suites at once, which contend for the
+same CPU — start at 2-4 and watch for timeouts before going higher.
 """
 from __future__ import annotations
 
@@ -63,7 +74,10 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -446,15 +460,60 @@ _RECORD_DEFAULTS = dict(
 )
 
 
-def emit(fh, **fields) -> None:
+def emit(fh, lock: threading.Lock | None = None, **fields) -> None:
     rec = dict(_RECORD_DEFAULTS)
     rec.update(fields)
-    fh.write(json.dumps(rec) + "\n")
+    line = json.dumps(rec) + "\n"
+    # ponytail: one shared lock for every writer, not per-file sharding —
+    # writes are microseconds next to a 60-120s agent invocation, so lock
+    # contention is noise. Flush every record (not just under --jobs) so a
+    # kill -9 mid-sweep, sequential or concurrent, always leaves --resume a
+    # valid partial file to read.
+    with lock or nullcontext():
+        fh.write(line)
+        fh.flush()
 
 
 def default_out_path() -> Path:
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return REPO_ROOT / "bench" / "results" / f"aider_polyglot-{ts}.jsonl"
+
+
+def load_completed(out_path: Path) -> set[tuple[str, str, int]]:
+    """Read an existing --out JSONL and return the (task_id, arm, run_idx)
+    keys that already have a *real* record, for --resume to skip.
+
+    A `dry-run` row never counts: it never touched the agent or the grader,
+    so it isn't done. A `skip:` row (missing local toolchain) DOES count —
+    the toolchain probe is a property of this machine, not of the run, so
+    retrying it here can't succeed either; treating it as pending would make
+    --resume loop on it forever.
+    """
+    completed: set[tuple[str, str, int]] = set()
+    if not out_path.exists():
+        return completed
+    with out_path.open() as fh:
+        for raw in fh:
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                rec = json.loads(raw)
+            except json.JSONDecodeError:
+                continue  # truncated last line from a kill -9; not a completed unit
+            if rec.get("notes", "") == "dry-run":
+                continue
+            completed.add((rec.get("task_id", ""), rec.get("arm", ""), rec.get("run_idx", 1)))
+    return completed
+
+
+def filter_resume(
+    units: list[tuple], completed: set[tuple[str, str, int]]
+) -> list[tuple]:
+    """Drop any (ex, arm, run_idx, ...) unit whose (task_id, arm, run_idx)
+    key is already in `completed`. `units` elements only need index 0 to
+    carry `.task_id`, index 1 the arm, index 2 the run_idx — see main()."""
+    return [u for u in units if (u[0].task_id, u[1], u[2]) not in completed]
 
 
 # --------------------------------------------------------------------------
@@ -474,7 +533,74 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--repo-dir", type=Path, default=CACHE_DIR, help="Local clone of polyglot-benchmark")
     p.add_argument("--test-timeout", type=int, default=180, help="Per-exercise test command timeout (s)")
     p.add_argument("--agent-timeout", type=int, default=600, help="Per-invocation omp timeout (s)")
+    p.add_argument(
+        "--resume", action="store_true",
+        help="Skip (task_id, arm, run_idx) units already recorded in --out. A "
+             "`dry-run` row never counts as done; a `skip:` row (missing "
+             "toolchain) does, since re-running it on this host can't succeed "
+             "either. Default off: without this flag, --out is appended to "
+             "from scratch exactly as before.",
+    )
+    p.add_argument(
+        "--jobs", type=int, default=1, metavar="N",
+        help="Run N (exercise, arm, run) units concurrently in a thread pool "
+             "(the work is subprocess-bound, so threads are correct — no "
+             "multiprocessing needed). Default 1 keeps today's exact "
+             "sequential behaviour. WARNING: N>1 risks provider rate limits "
+             "and CPU contention between concurrently running language test "
+             "suites — start low and watch for spurious timeouts.",
+    )
     return p.parse_args(argv)
+
+
+def _process_unit(
+    ex: Exercise, arm: str, run_idx: int, model: str, thinking: str,
+    ok: bool, reason: str, args: argparse.Namespace, fh, lock: threading.Lock | None,
+    state: dict,
+) -> None:
+    """Run one (exercise, arm, run_idx) unit end to end and append its JSONL
+    record. Safe to call from multiple threads concurrently: all shared
+    mutable state (the output file and the `printed_prompt` flag) goes
+    through `lock`; `make_scratch` needs no lock of its own because its
+    directory name already encodes (ex, arm, run_idx) — see main()'s
+    docstring note on collision-freedom.
+    """
+    if not ok:
+        emit(fh, lock=lock, task_id=ex.task_id, arm=arm, run_idx=run_idx,
+             model=model, thinking=thinking, notes=f"skip: {reason}")
+        return
+
+    prompt = build_prompt(ex)
+
+    if args.dry_run:
+        with lock or nullcontext():
+            if not state["printed_prompt"]:
+                print("=" * 72)
+                print(f"ASSEMBLED PROMPT — {ex.task_id} [{arm}]")
+                print("=" * 72)
+                print(prompt)
+                print("=" * 72)
+                state["printed_prompt"] = True
+        emit(fh, lock=lock, task_id=ex.task_id, arm=arm, run_idx=run_idx,
+             model=model, thinking=thinking, notes="dry-run")
+        return
+
+    run_dir = make_scratch(ex, arm, run_idx)
+    work = run_dir / "work"
+    latency, tokens_in, tokens_out, cost_usd = invoke_omp(
+        prompt, arm, work, model, thinking, run_dir, args.agent_timeout
+    )
+    restore_test_files(ex, work)
+    try:
+        passed, output = run_tests(ex, work, args.test_timeout)
+        note = "" if passed else output[-400:]
+    except subprocess.TimeoutExpired:
+        passed, note = False, "test command timed out"
+
+    emit(fh, lock=lock, task_id=ex.task_id, arm=arm, run_idx=run_idx, passed=passed,
+         latency_s=round(latency, 2), model=model, thinking=thinking, notes=note,
+         tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=round(cost_usd, 6))
+    shutil.rmtree(run_dir, ignore_errors=True)
 
 
 def main(argv=None) -> int:
@@ -503,54 +629,44 @@ def main(argv=None) -> int:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     SCRATCH_ROOT.mkdir(exist_ok=True)
 
-    printed_prompt = False
-    n_records = 0
+    # (ex, arm, run_idx) -> make_scratch()'s dir name is exactly
+    # f"{lang}__{name}__{arm}__{run_idx}", one string per unit below, so two
+    # units never collide on a scratch dir regardless of --jobs.
+    units: list[tuple[Exercise, str, int, str, str, bool, str]] = []
+    for ex in exercises:
+        ok, reason = toolchains[ex.lang]
+        for arm in arms:
+            model, thinking = effective_model_thinking(arm, args.model, args.thinking)
+            for run_idx in range(1, args.runs + 1):
+                units.append((ex, arm, run_idx, model, thinking, ok, reason))
+
+    if args.resume:
+        completed = load_completed(out_path)
+        before = len(units)
+        units = filter_resume(units, completed)
+        print(f"--resume: {before - len(units)} unit(s) already done, skipping; "
+              f"{len(units)} remaining.\n")
+
+    state = {"printed_prompt": False}
+    lock = threading.Lock() if args.jobs > 1 else None
+
     with out_path.open("a") as fh:
-        for ex in exercises:
-            ok, reason = toolchains[ex.lang]
-            for arm in arms:
-                model, thinking = effective_model_thinking(arm, args.model, args.thinking)
-                for run_idx in range(1, args.runs + 1):
-                    if not ok:
-                        emit(fh, task_id=ex.task_id, arm=arm, run_idx=run_idx,
-                             model=model, thinking=thinking, notes=f"skip: {reason}")
-                        n_records += 1
-                        continue
+        if args.jobs > 1:
+            with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+                futures = [
+                    pool.submit(_process_unit, ex, arm, run_idx, model, thinking, ok, reason,
+                                args, fh, lock, state)
+                    for ex, arm, run_idx, model, thinking, ok, reason in units
+                ]
+                for f in futures:
+                    f.result()  # re-raise the first worker exception, if any
+        else:
+            # No pool, no lock: the cheap default path is byte-identical to
+            # pre-concurrency behaviour, so it has no new failure modes.
+            for ex, arm, run_idx, model, thinking, ok, reason in units:
+                _process_unit(ex, arm, run_idx, model, thinking, ok, reason, args, fh, None, state)
 
-                    prompt = build_prompt(ex)
-
-                    if args.dry_run:
-                        if not printed_prompt:
-                            print("=" * 72)
-                            print(f"ASSEMBLED PROMPT — {ex.task_id} [{arm}]")
-                            print("=" * 72)
-                            print(prompt)
-                            print("=" * 72)
-                            printed_prompt = True
-                        emit(fh, task_id=ex.task_id, arm=arm, run_idx=run_idx,
-                             model=model, thinking=thinking, notes="dry-run")
-                        n_records += 1
-                        continue
-
-                    run_dir = make_scratch(ex, arm, run_idx)
-                    work = run_dir / "work"
-                    latency, tokens_in, tokens_out, cost_usd = invoke_omp(
-                        prompt, arm, work, model, thinking, run_dir, args.agent_timeout
-                    )
-                    restore_test_files(ex, work)
-                    try:
-                        passed, output = run_tests(ex, work, args.test_timeout)
-                        note = "" if passed else output[-400:]
-                    except subprocess.TimeoutExpired:
-                        passed, note = False, "test command timed out"
-
-                    emit(fh, task_id=ex.task_id, arm=arm, run_idx=run_idx, passed=passed,
-                         latency_s=round(latency, 2), model=model, thinking=thinking, notes=note,
-                         tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=round(cost_usd, 6))
-                    n_records += 1
-                    shutil.rmtree(run_dir, ignore_errors=True)
-
-    print(f"Wrote {n_records} record(s) to {out_path}")
+    print(f"Wrote {len(units)} record(s) to {out_path}")
     return 0
 
 
