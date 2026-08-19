@@ -115,6 +115,40 @@ auto-discovery.
 
 ## Distribution
 
+**`npx skills add aryrabelo/deep-fable` — works today, no repo changes needed.** The
+[skills.sh](https://www.skills.sh) CLI ([vercel-labs/skills](https://github.com/vercel-labs/skills),
+v1.5.23) clones the repo and reports exactly one skill. Two facts about *why* it works, both
+load-bearing and both pinned by `tests/test_npx_install.py`:
+
+1. **Discovery reaches `.omp/skills/` only through the recursive fallback.** The CLI first
+   scans a fixed list of conventional skill directories (`skills/`, `.claude/skills/`,
+   `.agents/skills/`, …); `.omp/skills/` is not on that list. The recursive walk that does
+   find it runs *only when phase one finds nothing*. Adding a real skill directory at any
+   conventional path would silently drop `j-space` from the npx install —
+   `test_no_conventional_skill_dir_shadows_the_canonical_one` fails if anyone does.
+2. **The committed `.agents/skills/j-space` symlink is invisible to the CLI.** Node's
+   `readdir(withFileTypes)` reports `isDirectory()` false for symlink entries, so discovery
+   skips it. The symlink still earns its place — OMP, Codex, Cursor and Gemini read it
+   directly — but it does not help the npx route.
+
+Also: the 39 copies of `SKILL.md` under `model-eval/work/` (Round 1's task D operated on the
+skill's own scripts) all declare `name: j-space`, and the CLI dedupes discovered skills by
+name. `test_every_j_space_skill_md_in_repo_is_byte_identical_to_canonical` ensures that
+whichever copy wins the dedup, the user gets identical bytes.
+
+If the priority-path trap ever bites, the structural fix is to invert the layout: make
+`.agents/skills/j-space` the real directory and `.omp/skills/j-space` the symlink, which puts
+the skill on the CLI's phase-one path. That requires switching `install.sh` to `cp -RL`
+(currently `cp -R`, which would copy a symlink into the profile and break the
+"survives deletion of the checkout" guarantee), repointing the six adapters, and inverting
+`test_shared_skills_symlink`. Not worth it while one guard test holds the line.
+
+**The CLI installs skills only.** There is no command/prompt handling anywhere in its source,
+so `/deep-fable` cannot ride along; it ships via `./install.sh` or a one-file `cp`.
+"Packs" on skills.sh are a web-app concept — the string does not appear in the CLI source.
+
+Still open:
+
 - `.claude-plugin/plugin.json` + `marketplace.json` — near-zero marginal cost once the
   Claude Code adapter exists.
 - `VERSION` + `CHANGELOG.md` + an `--update` path in `install.sh` for reinstall-in-place.

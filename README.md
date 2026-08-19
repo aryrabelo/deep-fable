@@ -1,13 +1,40 @@
 # deep-fable
 
 [![test](https://github.com/aryrabelo/deep-fable/actions/workflows/test.yml/badge.svg)](https://github.com/aryrabelo/deep-fable/actions/workflows/test.yml)
+[![skills.sh](https://skills.sh/b/aryrabelo/deep-fable)](https://skills.sh/aryrabelo/deep-fable)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 An OMP profile that boots every session into the J-Space inner-workspace discipline, running on DeepSeek — plus the benchmark that motivated putting DeepSeek in that seat.
 
 No harness, no state machine. A profile: a system prompt append, a model default, and a vendored skill.
 
-## Install
+## Install the skill — one command, no clone
+
+```bash
+npx skills add aryrabelo/deep-fable
+```
+
+That is the [skills.sh](https://www.skills.sh) CLI ([vercel-labs/skills](https://github.com/vercel-labs/skills)).
+It clones the repo, finds `j-space`, and installs it for the agents it detects. Useful forms:
+
+```bash
+npx skills add aryrabelo/deep-fable              # project-level, auto-detected agent
+npx skills add aryrabelo/deep-fable --global     # user-level, every session
+npx skills add aryrabelo/deep-fable -a claude    # one specific agent
+npx skills add aryrabelo/deep-fable --list       # see what it found, install nothing
+npx skills add aryrabelo/deep-fable --copy       # copy instead of symlinking
+```
+
+It symlinks into each agent's skills directory by default, and edits no config file. Verified
+against CLI v1.5.23: `--list` against this repo reports exactly one skill, `j-space`, with the
+full description.
+
+**It installs skills only — not the `/deep-fable` slash command.** The skills.sh CLI has no
+command/prompt handling at all (there is no `commands/` code path in its source). For the
+command, use `./install.sh` below, or copy the one file:
+`cp .omp/commands/deep-fable.md ~/.omp/agent/commands/`.
+
+## Install the profile
 
 ```bash
 git clone https://github.com/aryrabelo/deep-fable.git
