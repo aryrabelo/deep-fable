@@ -140,6 +140,7 @@ def run_live(
     tb_output_path: Path,
     run_idx: int,
     agent_timeout_sec: float,
+    test_timeout_sec: float,
 ) -> list[dict]:
     run_id = make_run_id(arm, datetime.now(timezone.utc))
     env = dict(os.environ)
@@ -165,6 +166,8 @@ def run_live(
         run_id,
         "--global-agent-timeout-sec",
         str(agent_timeout_sec),
+        "--global-test-timeout-sec",
+        str(test_timeout_sec),
     ]
     for task_id in task_ids:
         cmd += ["-t", task_id]
@@ -189,6 +192,18 @@ def main() -> int:
              "recorded `agent_timeout` with 0 tokens. "
              "ponytail: raise the ceiling rather than cache the install; bake omp "
              "into a base image if the setup share of wall time starts to hurt.",
+    )
+    parser.add_argument(
+        "--test-timeout-sec", type=float, default=1200.0,
+        help="Passed through as tb's --global-test-timeout-sec, overriding each "
+             "task.yaml's `max_test_timeout_sec`. Those defaults (60-120s) assume "
+             "a test phase that only runs the tests. Some tasks install a "
+             "toolchain first — swe-bench-fsspec does `apt-get install gcc` plus "
+             "`pip install -e .[test]`, ~11min of downloads at the ~300-600kB/s "
+             "reachable here — and blow the budget every time, recording "
+             "`test_timeout` with `is_resolved: null`, i.e. a trial that cost full "
+             "wall time and yields no pass/fail. Prefer tasks whose run-tests.sh "
+             "installs nothing; raise this when that is not possible.",
     )
     parser.add_argument(
         "--thinking", default=os.environ.get("DEEP_FABLE_THINKING", DEFAULT_THINKING)
@@ -244,6 +259,7 @@ def main() -> int:
             args.tb_output_path,
             args.run_idx,
             args.agent_timeout_sec,
+            args.test_timeout_sec,
         )
 
     with out_path.open("a") as fh:

@@ -587,7 +587,7 @@ Three models, three capability tiers, no detected benefit anywhere, and a token 
 time. The n=10 Sonnet probe is not powered for a verdict and is not claimed as one — but a zero
 discordant-pair count is a weak result in only one direction. It cannot hide a large effect.
 
-## 14. The long-horizon question is the one still open — and the instrument is now one credential away
+## 14. The long-horizon question is the one still open — bringing the instrument up cost three more bugs
 
 Everything in §8–§13 lives on aider-polyglot: short, single-file, fully-specified exercises with
 a test suite handed over. The J-Space skill claims a different domain — chained reasoning,
@@ -625,6 +625,37 @@ found' — rotacionar"*). The aider sweeps were unaffected because local `omp` a
 through its own broker on this machine; a fresh container has only the env var.
 
 `openrouter/deepseek/deepseek-v4-flash-0731` is reachable only through OpenRouter here, so the
-long-horizon deepseek question is blocked on **rotating one key**, not on money, Docker, disk
-(321 GiB free), or code. Everything else is staged: colima up, `terminal-bench-core==0.1.1`
-downloaded (80 tasks), adapter fixed, `--task` added for purposive single-task probes.
+whole long-horizon question hung on rotating one key — not on money, Docker, disk (321 GiB
+free), or code. The key was rotated the same day and verified live (`/api/v1/key` → HTTP 200,
+paid tier, no cap); note that the shell's `OPENROUTER_API_KEY` stayed dead, so runs must export
+the value from the secret store rather than trust the ambient variable.
+
+**6. The test phase has its own budget, and some tasks spend it installing.** With auth fixed
+the pipeline resolved end to end on `hello-world` — container built, `omp/17.4.0` installed,
+model acted, tests graded. The task legitimately failed, and instructively: the model wrote
+`Hello, world!` with no trailing newline while its own summary claimed *"trailing newline"*, so
+`assert hello_path.read_text() == "Hello, world!\n"` failed on the missing byte.
+
+The first real paired probe then burned an hour for nothing. `swe-bench-fsspec` was chosen for
+being the most long-horizon-looking task in the subset; its `run-tests.sh` opens with
+`apt-get install -y gcc` and `pip install -e .[test]`, against a `max_test_timeout_sec` of
+120.0. At the ~300–600 kB/s reachable from here that download alone needs ~11 minutes, so both
+trials died as `test_timeout` with **`is_resolved: null`** — full wall-clock cost, no pass/fail,
+zero information. `--test-timeout-sec` (default 1200s) now overrides it.
+
+The network was measured before blaming the VM: 603 kB/s inside a container against 280 kB/s on
+the host, so colima is not the bottleneck and there is nothing local to fix. The durable lesson
+is a selection rule rather than a timeout: **pick tasks whose `run-tests.sh` installs nothing.**
+`chess-best-move` and `intrusion-detection` install nothing; `fix-git` pulls boto3;
+`swe-bench-fsspec` pulls a compiler. The probe was re-pointed at `intrusion-detection`, the sole
+`hard`-tier task in the subset, which is both the strongest long-horizon test available and free
+in its test phase.
+
+**Known limitation of every terminal-bench figure here.** `AbstractInstalledAgent.perform_task`
+returns `AgentResult(total_input_tokens=0, total_output_tokens=0)` hardcoded upstream, so no
+installed-agent adapter reports usage — the shipped Codex and Claude adapters included. The
+length-control gate of §5 and the mean-`tokens_in` requirement of §7 therefore **cannot be
+satisfied on this benchmark** without overriding `perform_task` to recover usage from the
+container. Any claim made from terminal-bench data must state that its arms were not
+token-verified; the aider-polyglot arms remain the only token-controlled comparison in this
+repository.
