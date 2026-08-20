@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>J-Space — o que prometia, o que medimos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Afacad:wght@600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --background:#fafafa;
+  --surface:#f3f3f3;
+  --card:#ffffff;
+  --foreground:#191919;
+  --muted:#6b7280;
+  --muted-surface:#eeeeee;
+  --border:#e8e8e8;
+  --accent:#fb3f03;
+  --accent-foreground:#ffffff;
+  --brand:#1d4ed8;
+  --destructive:#d2483a;
+  --radius:0.3rem;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  background:var(--surface);
+  color:var(--foreground);
+  font-family:"Geist",sans-serif;
+  font-size:18px;
+  line-height:1.5;
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+.stage{position:fixed;inset:0;padding:24px}
+.deck{
+  position:absolute;top:50%;left:50%;
+  width:1600px;height:900px;
+  transform-origin:center;
+  background:var(--background);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  box-shadow:0 24px 64px rgba(25,25,25,.08);
+  overflow:hidden;
+}
+.slide{
+  position:absolute;inset:0;
+  display:none;
+  grid-template-rows:auto 1fr auto;
+  padding:56px 72px 44px;
+}
+.slide.is-active{display:grid}
+
+/* ---------- chrome ---------- */
+.slide-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding-bottom:20px;
+}
+.logo{display:flex;align-items:center;gap:10px;color:var(--accent)}
+.logo svg{display:block}
+.wordmark{
+  font-family:"Afacad",sans-serif;font-weight:700;
+  font-size:22px;letter-spacing:-0.03em;color:var(--foreground);
+}
+.overline{
+  font-family:"Geist Mono",monospace;
+  font-size:13px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);
+}
+.overline b{color:var(--accent);font-weight:600}
+.slide-foot{
+  display:flex;align-items:flex-end;justify-content:space-between;
+  padding-top:20px;
+  font-family:"Geist Mono",monospace;font-size:13px;color:var(--muted);
+}
+.counter{position:fixed;right:28px;bottom:20px;font-family:"Geist Mono",monospace;font-size:13px;color:var(--muted);z-index:30}
+.progress{position:fixed;left:0;bottom:0;height:3px;background:var(--accent);width:0;z-index:30;transition:width .25s ease}
+
+/* ---------- type ---------- */
+h1,h2{font-family:"Fraunces",serif;font-weight:600;letter-spacing:-0.02em;line-height:1.05}
+h1{font-size:120px}
+h2{font-size:58px;max-width:22ch}
+.body-block{max-width:64ch}
+p.lead{font-size:24px;line-height:1.55;color:var(--foreground)}
+p.body{font-size:20px;line-height:1.6;color:var(--foreground)}
+p.mut{color:var(--muted)}
+em{font-style:italic}
+.fecho{
+  font-family:"Fraunces",serif;font-size:27px;font-weight:500;
+  line-height:1.35;letter-spacing:-0.01em;
+  border-left:3px solid var(--accent);
+  padding-left:22px;max-width:56ch;
+}
+.fecho strong{color:var(--accent);font-weight:600}
+.kicker{
+  font-family:"Geist Mono",monospace;font-size:13px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:18px;font-weight:600;
+}
+
+/* asymmetric two-col scaffold */
+.split{display:grid;grid-template-columns:5fr 7fr;gap:64px;align-items:start;min-height:0}
+.split-narrow{display:grid;grid-template-columns:4fr 8fr;gap:64px;align-items:start;min-height:0}
+
+/* ---------- tables ---------- */
+table{border-collapse:collapse;width:100%;font-size:19px}
+th{
+  font-family:"Geist Mono",monospace;font-size:12.5px;font-weight:500;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:0 18px 12px 0;border-bottom:2px solid var(--foreground);
+}
+td{padding:14px 18px 14px 0;border-bottom:1px solid var(--border);vertical-align:top}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;padding-right:0;padding-left:18px}
+td.mut{color:var(--muted)}
+td .hit{color:var(--accent);font-weight:700}
+td .hvy{font-weight:700}
+tr.row-hi td{background:var(--card)}
+.mono{font-family:"Geist Mono",monospace;font-size:.92em}
+
+/* lists */
+ol.rzn{list-style:none;counter-reset:r;display:grid;gap:20px;max-width:62ch}
+ol.rzn li{counter-increment:r;display:grid;grid-template-columns:52px 1fr;gap:16px;font-size:21px;line-height:1.5}
+ol.rzn li::before{
+  content:counter(r,decimal-leading-zero);
+  font-family:"Geist Mono",monospace;font-size:15px;color:var(--accent);
+  padding-top:5px;font-weight:600;
+}
+ul.plain{list-style:none;display:grid;gap:12px;font-size:20px;line-height:1.55}
+ul.plain li{padding-left:20px;position:relative}
+ul.plain li::before{content:"";position:absolute;left:0;top:.62em;width:8px;height:2px;background:var(--accent)}
+
+/* pull quote */
+.pull{
+  font-family:"Fraunces",serif;font-weight:600;font-size:52px;line-height:1.15;
+  letter-spacing:-0.02em;max-width:20ch;
+}
+.pull .acc{color:var(--accent)}
+
+/* boxes for slides 18/20 */
+.twocol{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-content:start}
+.box{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:36px 40px;
+}
+.box .bh{
+  font-family:"Geist Mono",monospace;font-size:13px;letter-spacing:.14em;
+  text-transform:uppercase;font-weight:600;margin-bottom:16px;
+}
+.box .bh.ok{color:var(--foreground)}
+.box .bh.no{color:var(--muted)}
+.box .bh.acc{color:var(--accent)}
+.box p{font-size:19.5px;line-height:1.6}
+
+/* slide 16: interruption */
+.slide.interrupt{background:var(--foreground);color:var(--background)}
+.slide.interrupt .overline,.slide.interrupt .slide-foot{color:#9ca3af}
+.slide.interrupt .wordmark{color:var(--background)}
+.slide.interrupt .fecho{border-color:var(--accent)}
+.slide.interrupt p.body,.slide.interrupt p.lead{color:#e5e5e5}
+.slide.interrupt h2{color:var(--background)}
+
+/* cover / close centered */
+.center-stack{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;gap:0;
+}
+
+/* notes */
+.notes{
+  position:fixed;left:24px;right:24px;bottom:24px;z-index:40;
+  background:var(--foreground);color:var(--background);
+  border-radius:var(--radius);padding:18px 24px;
+  font-size:16px;line-height:1.5;display:none;
+  box-shadow:0 12px 40px rgba(0,0,0,.3);
+}
+.notes.show{display:block}
+.notes .nlabel{
+  font-family:"Geist Mono",monospace;font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:6px;
+}
+
+/* print */
+@media print{
+  body{overflow:visible;background:#fff}
+  .stage{position:static;padding:0}
+  .deck{position:static;transform:none !important;width:1600px;height:900px;box-shadow:none;border:none;margin:0 auto}
+  .slide{display:grid !important;position:relative;page-break-after:always;border-bottom:1px solid var(--border)}
+  .counter,.progress,.notes{display:none !important}
+}
+</style>
+</head>
+<body>
+<div class="stage">
+<div class="deck" id="deck">
+
+<!-- SLIDE 1 — Capa -->
+<section class="slide" data-notes="Resultado central — nenhum benefício mensurável em nenhum tier de capacidade.">
+  <div class="slide-head">
+    <div class="logo">
+      <svg width="58" height="24" viewBox="0 0 58 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5 L5 12 L12 19"/><path d="M19 19 L28 6 L37 19"/><path d="M46 5 L53 12 L46 19"/></svg>
+      <span class="wordmark">aryrabelo</span>
+    </div>
+    <div class="overline">Estudo de benchmark · 2026-08-20</div>
+  </div>
+  <div class="center-stack">
+    <h1>J-Space</h1>
+    <p class="lead mut" style="margin-top:28px;max-width:44ch">O que a skill prometia, e o que quatro experimentos mediram</p>
+  </div>
+  <div class="slide-foot"><span>deep-fable · commit c008974 · 85 testes passando</span><span></span></div>
+</section>
+
+<!-- SLIDE 2 — A pergunta -->
+<section class="slide" data-notes="O estudo existe porque a alegação era falsificável.">
+  <div class="slide-head">
+    <div class="logo"><svg width="46" height="19" viewBox="0 0 58 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5 L5 12 L12 19"/><path d="M19 19 L28 6 L37 19"/><path d="M46 5 L53 12 L46 19"/></svg></div>
+    <div class="overline">A pergunta</div>
+  </div>
+  <div class="split">
+    <div>
+      <h2>A pergunta era simples</h2>
+      <p class="lead" style="margin-top:28px">&ldquo;O J-Space melhora o desempenho de um modelo em tarefas de código?&rdquo;</p>
+    </div>
+    <div>
+      <div class="kicker">Por que medir em vez de opinar</div>
+      <ol class="rzn">
+        <li>A skill custa tokens em toda invocação — se não entrega, é imposto puro.</li>
+        <li>A intuição de &ldquo;mais instrução de raciocínio = melhor&rdquo; é forte e não testada.</li>
+        <li>Havia números publicados alegando +7 a +16 pontos percentuais de ganho.</li>
+      </ol>
+    </div>
+  </div>
+  <div class="slide-foot"><span>J-Space · benchmark</span><span></span></div>
+</section>
+
+<!-- SLIDE 3 — O que o J-Space diz que é -->
+<section class="slide">
+  <div class="slide-head">
+    <div class="logo"><svg width="46" height="19" viewBox="0 0 58 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5 L5 12 L12 19"/><path d="M19 19 L28 6 L37 19"/><path d="M46 5 L53 12 L46 19"/></svg></div>
+    <div class="overline">A ciência citada</div>
+  </div>
+  <div class="split-narrow">
+    <h2>Primeiro, a ciência que ele cita</h2>
+    <div class="body-block" style="display:grid;gap:24px">
+      <p class="body">A skill se apoia em pesquisa real de interpretabilidade — <em>Verbalizable Representations Form a Global Workspace in Language Models</em> (Anthropic, jul/2026).</p>
+      <p class="body">A descoberta: modelos mantêm um conjunto <strong>privilegiado e pequeno</strong> de representações internas — o J-space — acima de um volume muito maior de processamento automático inacessível. Encontrado com uma técnica nova, a <strong>Jacobian lens (J-lens)</strong>.</p>
+      <p class="body mut">Definição operacional: o J-space guarda os conceitos que o modelo está <strong style="color:var(--foreground)">a ponto de dizer</strong>. Quando um padrão acende, a palavra está &ldquo;na mente do modelo&rdquo;, chegue ou não à página.</p>
+    </div>
+  </div>
+  <div class="slide-foot"><span>J-Space · benchmark</span><span></span></div>
+</section>
+
+<!-- SLIDE 4 — Propriedades do achado -->
+<section class="slide">
+  <div class="slide-head">
+    <div class="logo"><svg width="46" height="19" viewBox="0 0 58 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5 L5 12 L12 19"/><path d="M19 19 L28 6 L37 19"/><path d="M46 5 L53 12 L46 19"/></svg></div>
+    <div class="overline">A ciência citada</div>
+  </div>
+  <div style="display:grid;grid-template-rows:auto 1fr auto;gap:36px;min-height:0">
+    <h2>Quatro fatos que a pesquisa estabeleceu</h2>
+    <table>
+      <thead><tr><th style="width:30%">Propriedade</th><th>Evidência</th></tr></thead>
+      <tbody>
+        <tr><td><span class="hvy">Emergente, não projetado</span></td><td class="mut">Surgiu no treino; ninguém programou</td></tr>
+        <tr><td><span class="hvy">Verbal</span></td><td class="mut">Quase inteiramente palavras — o modelo pensa em palavras sem dizê-las</td></tr>
+        <tr><td><span class="hvy">Pequeno</span></td><td class="mut">Menos de 10% da variância de ativação; ~uma ou duas ideias coerentes</td></tr>
+        <tr><td><span class="hvy">Estruturado em profundidade</span></td><td class="mut">Banda sensorial, banda workspace (~camadas 38–92), banda motora</td></tr>
+      </tbody>
+    </table>
+    <p class="fecho">Profundidade faz no modelo o que o tempo faz num cérebro recorrente.</p>
+  </div>
+  <div class="slide-foot"><span>J-Space · benchmark</span><span></span></div>
+</section>
+
+<!-- SLIDE 5 — Cinco propriedades funcionais -->
+<section class="slide" data-notes="Isso é ciência sólida. O problema vem depois.">
+  <div class="slide-head">
+    <div class="logo"><svg width="46" height="19" viewBox="0 0 58 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5 L5 12 L12 19"/><path d="M19 19 L28 6 L37 19"/><path d="M46 5 L53 12 L46 19"/></svg></div>
+    <div class="overline">A ciência citada</div>
+  </div>
+  <div class="split-narrow">
+    <div>
+      <h2>A assinatura de &ldquo;workspace&rdquo;</h2>
+      <p class="body mut" style="margin-top:24px;max-width:26ch">A pesquisa mostrou cinco propriedades, cada uma com experimento causal:</p>
+    </div>
+    <ol class="rzn" style="max-width:none">
+      <li><span><strong>Relato verbal</strong> — trocar o padrão &ldquo;Soccer&rdquo; por &ldquo;Rugby&rdquo; muda a resposta falada.</span></li>
+      <li><span><strong>Modulação dirigida</strong> — mandado copiar uma frase pensando em cítricos, o workspace enche de <em>orange, fruits</em>; a saída só tem a frase.</span></li>
+      <li><span><strong>Raciocínio interno</strong> — &ldquo;pernas do animal que tece teias&rdquo;: <em>spider</em> acende no meio da rede; trocar por <em>ant</em> muda 8 para 6.</span></li>
+      <li><span><strong>Broadcast</strong> — uma única troca França→China muda quatro respostas de uma vez (Paris→Pequim, francês→chinês, Europa→Ásia, Euro→Yuan).</span></li>
+      <li><span><strong>Seletividade</strong> — apagar o conteúdo mais ativo deixa o modelo fluente, mas raciocínio multi-hop colapsa para perto de zero.</span></li>
+    </ol>
+  </div>
+  <div class="slide-foot"><span>J-Space · benchmark</span><span></span></div>
+</section>
+
+<!-- SLIDE 6 — O que a skill faz de fato -->
+<section class="slide">
+  <div class="slide-head">
+    <div class="logo"><svg width="46" height="19" viewBox="0 0 58 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5 L5 12 L12 19"/><path d="M19 19 L28 6 L37 19"/><path d="M46 5 L53 12 L46 19"/></svg></div>
+    <div class="overline">A skill</div>
+  </div>
+  <div class="split">
+    <div style="display:grid;gap:28px;align-content:start">
+      <h2>Agora, o que a skill realmente é</h2>
+      <p class="body">Não é um modelo, um treino, nem uma intervenção nos pesos. É <strong>texto injetado no system prompt</strong>.</p>
+      <p class="fecho">O mecanismo é instrução. Nada mais.</p>
+    </div>
+    <div>
+      <div class="kicker">Estrutura</div>
+      <ul class="plain">
+        <li>Um <span class="mono">SKILL.md</span> de entrada que estabelece a &ldquo;premissa&rdquo; e roteia.</li>
+        <li>Um &ldquo;despertar de sessenta segundos&rdquo;: 5 perguntas que o modelo responde a si mesmo.</li>
+        <li>9 módulos carregados sob demanda (capacity, broadcast, deep-reasoning, introspection, self-monitoring, shorthand, markers, empirics, directed-focus).</li>
+        <li>Um &ldquo;gate&rdquo; que classifica a tarefa em três passes: fast / full / loop.</li>
+        <li>8 invariantes checadas em &ldquo;seams&rdquo;.</li>
+        <li>Um controlador opcional em Python que mantém um ledger.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="slide-foot"><span>J-Space · benchmark</span><span></span></div>
+</section>
+
+<!-- SLIDE 7 — Por que eles dizem que funciona -->
+<section class="slide">
+  <div class="slide-head">
+    <div class="logo"><svg width="46" height="19" viewBox="0 0 58 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5 L5 12 L12 19"/><path d="M19 19 L28 6 L37 19"/><path d="M46 5 L53 12 L46 19"/></svg></div>
+    <div class="overline">O argumento</div>
+  </div>
+  <div class="split">
+    <div style="display:grid;gap:24px;align-content:start">
+      <h2 style="font-size:44px">O argumento deles, no melhor enquadramento possível</h2>
+      <p class="body">Existe um resultado específico na pesquisa que é a ponte lógica da skill — <strong>counterfactual reflection training</strong>.</p>
+      <p class="body mut">O time treinou modelos apenas no que dizer <em>quando interrompidos e perguntados sobre sua decisão</em> — nunca no comportamento da tarefa. Comportamento desonesto caiu, e <em>honest, integrity</em> passaram a acender no J-space durante as tarefas. Ablar essas representações revertia a melhora.</p>
+    </div>
+    <div style="display:grid;gap:36px;align-content:center;height:100%">
+      <div class="pull">&ldquo;Treinar o modelo no que <span class="acc">dizer</span> moldou o que ele <span class="acc">pensa</span>.&rdquo;</div>
+      <p class="fecho" style="font-size:21px">Daí a aposta da skill — se articular auto-descrição é um canal de escrita para o workspace, então descrever o workspace ao modelo deveria melhorar como ele o usa.</p>
+    </div>
+  </div>
+  <div class="slide-foot"><span>J-Space · benchmark</span><span></span></div>
+</section>
+
+<!-- SLIDE 8 — O salto -->
+<section class="slide">
+  <div class="slide-head">
+    <div class="logo"><svg width="46" height="19" viewBox="0 0 58 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5 L5 12 L12 19"/><path d="M19 19 L28 6 L37 19"/><path d="M46 5 L53 12 L46 19"/></svg></div>
+    <div class="overline">O salto</div>
+  </div>
+  <div style="display:grid;grid-template-rows:auto auto 1fr auto;gap:28px;min-height:0">
+    <h2>Onde o argumento se estica</h2>
+    <p class="body mut" style="max-width:60ch">A ponte tem uma junta frouxa, e é ela que o estudo testa.</p>
+    <table>
+      <thead><tr><th style="width:44%">A pesquisa mostrou</th><th>A skill precisa que seja verdade</th></tr></thead>
+      <tbody>
+        <tr><td class="mut">Modelos têm um workspace global</td><td class="mut">(igual — isso está estabelecido)</td></tr>
+        <tr><td><span class="hvy">Treinar</span> o que dizer muda o que se pensa</td><td><span class="hit">Instruir via prompt</span> muda o que se pensa</td></tr>
+        <tr><td class="mut">Intervenção nos pesos, com ablação de controle</td><td>Texto no system prompt, <span class="hvy">sem controle</span></td></tr>
+        <tr><td class="mut">Medido em honestidade</td><td>Alegado em <span class="hvy">desempenho de código</span></td></tr>
+      </tbody>
+    </table>
+    <p class="fecho">Nada na pesquisa citada mede ganho de desempenho por instrução em prompt. Essa é a hipótese — e hipótese se testa.</p>
+  </div>
+  <div class="slide-foot"><span>J-Space · benchmark</span><span></span></div>
+</section>
+
+<!-- SLIDE 9 — Como testamos -->
+<section class="slide">
+  <div class="slide-head">
+    <div class="logo"><svg width="46" height="19" viewBox="0 0 58 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5 L5 12 L12 19"/><path d="M19 19 L28 6 L37 19"/><path d="M46 5 L53 12 L46 19"/></svg></div>
+    <div class="overline">Método</div>
+  </div>
+  <div class="split">
+    <div style="display:grid;gap:24px;align-content:start">
+      <h2>O desenho</h2>
+      <p class="body">Comparação <strong>pareada</strong> — o mesmo exercício, os mesmos modelos, variando só a skill.</p>
+      <p class="body mut">Por que o placebo importa: sem ele, qualquer ganho pode ser &ldquo;texto extra ajuda&rdquo;, não &ldquo;este texto ajuda&rdquo;. O placebo é pareado arquivo por arquivo com o real.</p>
+      <p class="body">Benchmark: aider polyglot — 178 exercícios de exercism em 6 linguagens, com suíte de teste como juiz. Subconjunto usado: javascript (49) + python (34) + rust (30) = <strong class="hit" style="color:var(--accent)">113</strong>.</p>
+    </div>
+    <div>
+      <div class="kicker">Três braços por modelo</div>
+      <ul class="plain" style="gap:24px">
+        <li><strong>jspace</strong> — a skill real carregada.</li>
+        <li><strong>plain</strong> (cru) — nada.</li>
+        <li><strong>placebo</strong> — uma skill de mesmo tamanho em tokens, com a mesma descrição de gatilho, e <strong>conteúdo vazio de instrução</strong>.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="slide-foot"><span>J-Space · benchmark</span><span></span></div>
+</section>
+
+<!-- SLIDE 10 — O rigor -->
+<section class="slide">
+  <div class="slide-head">
+    <div class="logo"><svg width="46" height="19" viewBox="0 0 58 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5 L5 12 L12 19"/><path d="M19 19 L28 6 L37 19"/><path d="M46 5 L53 12 L46 19"/></svg></div>
+    <div class="overline">Método</div>
+  </div>
+  <div style="display:grid;grid-template-rows:auto 1fr auto;gap:32px;min-height:0">
+    <h2>As regras foram escritas antes dos dados</h2>
+    <table>
+      <thead><tr><th style="width:34%">Instrumento</th><th>Para que serve</th></tr></thead>
+      <tbody>
+        <tr><td><span class="hvy">Pré-registro travado</span></td><td class="mut">Margem, alfa e comparações fixados antes de rodar</td></tr>
+        <tr><td><span class="hvy">McNemar exato</span></td><td class="mut">Teste pareado correto para binário — nunca z de duas proporções</td></tr>
+        <tr><td><span class="hvy">Gate de length control</span></td><td class="mut">Banda 1,0×–4,0× de tokens entre braços; mediu <span class="hit">1,016×</span></td></tr>
+        <tr><td><span class="hvy">Piso de pares discordantes</span></td><td class="mut">Sem 10 pares discordantes, o veredito é recusado</td></tr>
+        <tr><td><span class="hvy">Recusa mecânica</span></td><td class="mut">O analisador se nega a concluir fora de poder, em vez de deixar para o leitor</td></tr>
+      </tbody>
+    </table>
+    <p class="fecho">O objetivo do rigor não é parecer sério. É impedir que a gente se engane.</p>
+  </div>
+  <div class="slide-foot"><span>J-Space · benchmark</span><span></span></div>
+</section>
+
+<!-- SLIDE 11 — Seis bugs silenciosos -->
+<section class="slide">
+  <div class="slide-head">
+    <div class="logo"><svg width="46" height="19" viewBox="0 0 58 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5 L5 12 L12 19"/><path d="M19 19 L28 6 L37 19"/><path d="M46 5 L53 12 L46 19"/></svg></div>
+    <div class="overline">Instrumento</div>
+  </div>
+  <div class="split-narrow">
+    <div style="display:grid;gap:28px;align-content:start">
+      <h2>O harness quase publicou números errados</h2>
+      <p class="body mut" style="max-width:28ch">Antes de qualquer resultado, o instrumento produziu seis falhas que não reclamavam:</p>
+      <p class="fecho" style="font-size:23px">Cada um produziria um resultado confiante e falso.</p>
+    </div>
+    <ol class="rzn" style="gap:14px;max-width:none">
+      <li><span><span class="mono">work_dir()</span> derivava o target do CMake do nome do diretório — quebrava <strong>todo</strong> C++.</span></li>
+      <li><span>Glob de sessão errado — <strong>todo</strong> <span class="mono">tokens_in</span> e <span class="mono">cost_usd</span> era zero.</span></li>
+      <li><span>Nada reclamava dos zeros.</span></li>
+      <li><span><span class="mono">run_id</span> com <span class="mono">T</span>/<span class="mono">Z</span> maiúsculos — todo build de container morria e era reportado como <strong>falha do modelo</strong>.</span></li>
+      <li><span>Timeout do agente cortava o install no pacote <strong>594/603</strong>.</span></li>
+      <li><span>Timeout de teste contra uma task que instala compilador — 1h de compute, <span class="mono">is_resolved: null</span>.</span></li>
+    </ol>
+  </div>
+  <div class="slide-foot"><span>J-Space · benchmark</span><span></span></div>
+</section>
+
+<!-- SLIDE 12 — Resultado 1: deepseek n=113 -->
+<section class="slide">
+  <div class="slide-head">
+    <div class="logo"><svg width="46" height="19" viewBox="0 0 58 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5 L5 12 L12 19"/><path d="M19 19 L28 6 L37 19"/><path d="M46 5 L53 12 L46 19"/></svg></div>
+    <div class="overline"><b>Resultado 1</b> · deepseek, n=113</div>
+  </div>
+  <div style="display:grid;grid-template-rows:auto 1fr auto;gap:26px;min-height:0">
+    <h2 style="font-size:48px">O experimento principal</h2>
+    <div style="display:grid;gap:34px;align-content:start">
+      <table>
+        <thead><tr><th>braço</th><th class="num">passou</th><th class="num">taxa</th><th class="num">IC 95% Wilson</th><th class="num">tokens_in médio</th></tr></thead>
+        <tbody>
+          <tr><td>ds-plain (cru)</td><td class="num">63/113</td><td class="num"><span class="hit">0,558</span></td><td class="num mut">[0,466, 0,646]</td><td class="num mut">376.685</td></tr>
+          <tr><td>ds-jspace</td><td class="num">61/113</td><td class="num"><span class="hvy">0,540</span></td><td class="num mut">[0,448, 0,629]</td><td class="num mut">388.675</td></tr>
+          <tr><td>ds-placebo</td><td class="num">58/113</td><td class="num"><span class="hvy">0,513</span></td><td class="num mut">[0,422, 0,603]</td><td class="num mut">382.443</td></tr>
+        </tbody>
+      </table>
+      <div>
+        <div class="kicker" style="margin-bottom:12px">McNemar pareado exato</div>
+        <table>
+          <thead><tr><th>comparação</th><th class="num">discordantes</th><th class="num">só A</th><th class="num">só B</th><th class="num">p</th></tr></thead>
+          <tbody>
+            <tr><td>jspace vs placebo (primário)</td><td class="num mut">29</td><td class="num mut">16</td><td class="num mut">13</td><td class="num"><span class="hit">0,711</span></td></tr>
+            <tr><td>jspace vs plain</td><td class="num mut">32</td><td class="num mut">15</td><td class="num"><span class="hit">17</span></td><td class="num"><span class="hvy">0,860</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="fecho">Sem efeito — e o sinal aponta <strong>contra</strong> a skill: 15 pares ganhos a 17 perdidos.</p>
+  </div>
+  <div class="slide-foot"><span>J-Space · benchmark</span><span></span></div>
+</section>
+
+<!-- SLIDE 13 — Resultado 2: havia folga? -->
+<section class="slide">
+  <div class="slide-head">
+    <div class="logo"><svg width="46" height="19" viewBox="0 0 58 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5 L5 12 L12 19"/><path d="M19 19 L28 6 L37 19"/><path d="M46 5 L53 12 L46 19"/></svg></div>
+    <div class="overline"><b>Resultado 2</b> · headroom</div>
+  </div>
+  <div class="split-narrow">
+    <div style="display:grid;gap:24px;align-content:start">
+      <h2 style="font-size:44px">A objeção óbvia, e a resposta</h2>
+      <p class="body mut">Um nulo pode significar &ldquo;não havia o que melhorar&rdquo;. Testável: 26 tasks tiveram falha nos três braços do deepseek. Se um modelo forte passar nelas cru, a folga existia.</p>
+    </div>
+    <div style="display:grid;gap:30px;align-content:start">
+      <table>
+        <thead><tr><th>task</th><th>3 braços deepseek</th><th>opus-med cru</th><th>kimi-max cru</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">rust/acronym</td><td class="mut">falha</td><td><span class="hit">passa</span></td><td><span class="hit">passa</span></td></tr>
+          <tr><td class="mono">python/list-ops</td><td class="mut">falha</td><td><span class="hit">passa</span></td><td><span class="hit">passa</span></td></tr>
+          <tr><td class="mono">rust/alphametics</td><td class="mut">falha</td><td><span class="hit">passa</span></td><td><span class="hit">passa</span></td></tr>
+        </tbody>
+      </table>
+      <p class="body">opus-med <strong class="hit" style="color:var(--accent)">6/6</strong> (Wilson [0,610, 1,000]); kimi-max <strong>3/3</strong>. Se a taxa real fosse 0,50, a chance de 6/6 seria 0,016.</p>
+      <p class="fecho" style="font-size:23px">A folga existia. O nulo é um nulo com espaço disponível — não falta de poder.</p>
+    </div>
+  </div>
+  <div class="slide-foot"><span>J-Space · benchmark</span><span></span></div>
+</section>
+
+<!-- SLIDE 14 — Resultado 3: sonnet pareado -->
+<section class="slide">
+  <div class="slide-head">
+    <div class="logo"><svg width="46" height="19" viewBox="0 0 58 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5 L5 12 L12 19"/><path d="M19 19 L28 6 L37 19"/><path d="M46 5 L53 12 L46 19"/></svg></div>
+    <div class="overline"><b>Resultado 3</b> · sonnet pareado</div>
+  </div>
+  <div class="split-narrow">
+    <div style="display:grid;gap:24px;align-content:start">
+      <h2>O nulo mais limpo</h2>
+      <p class="body mut">Mesmo modelo, mesmo thinking, a skill como única diferença. Dez tasks — as mesmas onde o deepseek falhou em tudo.</p>
+    </div>
+    <div style="display:grid;gap:28px;align-content:start">
+      <table>
+        <thead><tr><th>task</th><th>sonnet cru</th><th>sonnet + jspace</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">javascript/ledger</td><td class="mut">falha</td><td class="mut">falha</td></tr>
+          <tr><td>outras 9</td><td><span class="hit">passa</span></td><td><span class="hit">passa</span></td></tr>
+        </tbody>
+      </table>
+      <p class="body mono" style="font-size:17px;color:var(--muted)">both=9 · só-jspace=0 · só-cru=0 · nenhum=1 · discordantes=0</p>
+      <p class="body">Custo: <strong class="hit" style="color:var(--accent)">+5,4% tokens</strong> (739.286 vs 701.198) e <strong class="hit" style="color:var(--accent)">+10% latência</strong> (272s vs 247s).</p>
+      <p class="fecho" style="font-size:23px">Zero pares discordantes. A skill não mudou um único resultado — e cobrou.</p>
+    </div>
+  </div>
+  <div class="slide-foot"><span>J-Space · benchmark</span><span></span></div>
+</section>
+
+<!-- SLIDE 15 — Resultado 4: horizonte longo -->
+<section class="slide">
+  <div class="slide-head">
+    <div class="logo"><svg width="46" height="19" viewBox="0 0 58 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5 L5 12 L12 19"/><path d="M19 19 L28 6 L37 19"/><path d="M46 5 L53 12 L46 19"/></svg></div>
+    <div class="overline"><b>Resultado 4</b> · horizonte longo</div>
+  </div>
+  <div class="split-narrow">
+    <div style="display:grid;gap:24px;align-content:start">
+      <h2 style="font-size:44px">E no domínio que a skill realmente alega?</h2>
+      <p class="body mut">Os três primeiros testes são código curto e bem especificado. A skill alega outro domínio: raciocínio em cadeia, planejamento, trabalho agêntico longo, debug complexo.</p>
+      <p class="body mut">Instrumento: terminal-bench, 80 tasks multi-passo em container. Task escolhida: <span class="mono" style="color:var(--foreground)">intrusion-detection</span>, a única de tier <strong style="color:var(--foreground)">hard</strong>. Três runs por braço.</p>
+    </div>
+    <div style="display:grid;gap:32px;align-content:start">
+      <table>
+        <thead><tr><th>braço</th><th class="num">n</th><th class="num">passou</th><th class="num">latência média</th></tr></thead>
+        <tbody>
+          <tr><td>cru</td><td class="num mut">3</td><td class="num"><span class="hvy">0</span></td><td class="num mut">968s</td></tr>
+          <tr><td>jspace</td><td class="num mut">3</td><td class="num"><span class="hvy">0</span></td><td class="num"><span class="hit">1960s</span></td></tr>
+        </tbody>
+      </table>
+      <p class="fecho"><strong>2,02× mais lento para chegar na mesma falha</strong> — e censurado por baixo, porque um trial jspace bateu o teto de 2400s.</p>
+    </div>
+  </div>
+  <div class="slide-foot"><span>J-Space · benchmark</span><span></span></div>
+</section>
+
+<!-- SLIDE 16 — Uma correção honesta (interrupção) -->
+<section class="slide interrupt">
+  <div class="slide-head">
+    <div class="logo"><svg width="46" height="19" viewBox="0 0 58 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5 L5 12 L12 19"/><path d="M19 19 L28 6 L37 19"/><path d="M46 5 L53 12 L46 19"/></svg></div>
+    <div class="overline">Correção</div>
+  </div>
+  <div class="split-narrow">
+    <h2>Este último não é um nulo. É um piso.</h2>
+    <div style="display:grid;gap:26px;align-content:start">
+      <p class="body">0/3 contra 0/3 significa que os dois braços falharam sempre. Quando isso acontece, a skill não teve <strong style="color:var(--accent)">oportunidade</strong> de mudar um resultado, e a comparação não informa nada sobre ela.</p>
+      <p class="body">O erro foi de seleção: escolhi a task mais difícil disponível, que é exatamente o critério errado. O que a pergunta precisa é uma task na <strong style="color:var(--accent)">faixa de discriminação</strong> — onde o braço cru às vezes passa.</p>
+      <p class="fecho">Reportar isso como nulo seria inflar o resultado. É piso, e fica escrito como piso.</p>
+    </div>
+  </div>
+  <div class="slide-foot"><span>J-Space · benchmark</span><span></span></div>
+</section>
+
+<!-- SLIDE 17 — O quadro completo -->
+<section class="slide">
+  <div class="slide-head">
+    <div class="logo"><svg width="46" height="19" viewBox="0 0 58 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5 L5 12 L12 19"/><path d="M19 19 L28 6 L37 19"/><path d="M46 5 L53 12 L46 19"/></svg></div>
+    <div class="overline">Síntese</div>
+  </div>
+  <div style="display:grid;grid-template-rows:auto 1fr auto;gap:32px;min-height:0">
+    <h2>Quatro desenhos, quatro faixas de capacidade</h2>
+    <table>
+      <thead><tr><th>modelo</th><th>desenho</th><th>efeito</th><th class="num">custo da skill</th></tr></thead>
+      <tbody>
+        <tr><td><span class="hvy">deepseek</span> <span class="mut">(fraco)</span></td><td class="mut">n=113 pareado, com placebo</td><td>p = 0,711, nominalmente negativo</td><td class="num mut">+3,2% tokens</td></tr>
+        <tr><td><span class="hvy">sonnet</span> <span class="mut">(médio)</span></td><td class="mut">n=10 pareado</td><td>0 pares discordantes</td><td class="num mut">+5,4% tokens, +10% latência</td></tr>
+        <tr><td><span class="hvy">opus</span> <span class="mut">(forte)</span></td><td class="mut">n=6 cru</td><td>saturado, sem folga</td><td class="num mut">não testável</td></tr>
+        <tr><td><span class="hvy">deepseek</span>, horizonte longo</td><td class="mut">3×2, task hard</td><td><span class="hit">piso</span> — sem informação</td><td class="num"><span class="hit">2,02× latência</span></td></tr>
+      </tbody>
+    </table>
+    <p class="fecho">Nunca converteu um resultado. Cobrou em todos.</p>
+  </div>
+  <div class="slide-foot"><span>J-Space · benchmark</span><span></span></div>
+</section>
+
+<!-- SLIDE 18 — Provado / não provado -->
+<section class="slide">
+  <div class="slide-head">
+    <div class="logo"><svg width="46" height="19" viewBox="0 0 58 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5 L5 12 L12 19"/><path d="M19 19 L28 6 L37 19"/><path d="M46 5 L53 12 L46 19"/></svg></div>
+    <div class="overline">Fronteira</div>
+  </div>
+  <div style="display:grid;grid-template-rows:auto 1fr auto;gap:32px;min-height:0">
+    <h2 style="font-size:44px">A fronteira do que isso sustenta</h2>
+    <div class="twocol">
+      <div class="box">
+        <div class="bh ok">Sustentado</div>
+        <p>Nenhum benefício mensurável do addendum J-Space em código curto e bem especificado, em três tiers de capacidade, com controle de placebo pareado em tokens e gate de length control saudável (<strong>1,016×</strong>).</p>
+      </div>
+      <div class="box" style="background:var(--surface)">
+        <div class="bh no">Não sustentado</div>
+        <p style="color:var(--muted)">O domínio que a skill alega continua <strong style="color:var(--foreground)">não testado</strong>. Raciocínio em cadeia, planejamento, consistência global em entregável grande — nada disso foi medido. A tentativa (slide 15) caiu no piso.</p>
+      </div>
+    </div>
+    <p class="fecho">O ônus da prova virou de lado. Não cabe mostrar que não serve; cabe a quem propõe mostrar onde serve.</p>
+  </div>
+  <div class="slide-foot"><span>J-Space · benchmark</span><span></span></div>
+</section>
+
+<!-- SLIDE 19 — Explicação mecânica -->
+<section class="slide">
+  <div class="slide-head">
+    <div class="logo"><svg width="46" height="19" viewBox="0 0 58 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5 L5 12 L12 19"/><path d="M19 19 L28 6 L37 19"/><path d="M46 5 L53 12 L46 19"/></svg></div>
+    <div class="overline">Mecanismo</div>
+  </div>
+  <div class="split-narrow">
+    <h2>Por que eu acho que não funcionou</h2>
+    <div style="display:grid;gap:26px;align-content:start">
+      <p class="body">O addendum é andaime de raciocínio entregue via system prompt. Todos os braços rodaram em <span class="mono">thinking: max</span>.</p>
+      <p class="body mut">Esses modelos já raciocinam extensamente por padrão. O andaime instrui o modelo a fazer o que ele já está fazendo — orientação redundante, paga em tokens e latência. A skill antecede a geração de modelos com modo de pensamento nativo.</p>
+      <p class="fecho">Isso é uma previsão, não uma desculpa: prevê nulo também no horizonte longo, e se falsifica com uma task na faixa de discriminação — não com uma mais difícil.</p>
+    </div>
+  </div>
+  <div class="slide-foot"><span>J-Space · benchmark</span><span></span></div>
+</section>
+
+<!-- SLIDE 20 — A decisão -->
+<section class="slide">
+  <div class="slide-head">
+    <div class="logo">
+      <svg width="58" height="24" viewBox="0 0 58 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5 L5 12 L12 19"/><path d="M19 19 L28 6 L37 19"/><path d="M46 5 L53 12 L46 19"/></svg>
+      <span class="wordmark">aryrabelo</span>
+    </div>
+    <div class="overline">A decisão</div>
+  </div>
+  <div class="center-stack" style="gap:40px">
+    <h2 style="font-size:52px;max-width:none">O que eu faria</h2>
+    <div class="twocol" style="width:100%;text-align:left">
+      <div class="box" style="border-top:3px solid var(--accent)">
+        <div class="bh acc">Parar de usar a skill por default</div>
+        <p>Quatro desenhos, nenhuma conversão, custo em todos. Ela pode voltar à mesa quando alguém medir o domínio que ela alega.</p>
+      </div>
+      <div class="box" style="border-top:3px solid var(--foreground)">
+        <div class="bh ok">Guardar o instrumento</div>
+        <p>O repositório é um rig de comparação pareada que funciona: roda qualquer trio (modelo, thinking, skill) sobre 178 exercícios em 6 linguagens, com resume, paralelismo, placebo pareado em tokens, McNemar exato, TOST de equivalência, cálculo de poder — tudo stdlib. Foi ele que encontrou os seis bugs.</p>
+      </div>
+    </div>
+    <p class="pull" style="font-size:36px;max-width:34ch">O resultado negativo é o produto. Ele custou <span class="acc">cinco dólares</span> e evitou uma crença.</p>
+  </div>
+  <div class="slide-foot"><span>Custo real: US$ 5,50 em dinheiro + quota de assinatura · ~2h de compute na última fase</span><span></span></div>
+</section>
+
+</div>
+</div>
+
+<div class="counter" id="counter">1 / 20</div>
+<div class="progress" id="progress"></div>
+<div class="notes" id="notes"><div class="nlabel">Notas</div><div id="notesBody"></div></div>
+
+<script>
+(function(){
+  var deck = document.getElementById('deck');
+  var slides = Array.prototype.slice.call(deck.querySelectorAll('.slide'));
+  var counter = document.getElementById('counter');
+  var progress = document.getElementById('progress');
+  var notes = document.getElementById('notes');
+  var notesBody = document.getElementById('notesBody');
+  var KEY = 'aryDeck:jspace-benchmark';
+  var idx = 0;
+  var saved = parseInt(localStorage.getItem(KEY), 10);
+  if (!isNaN(saved) && saved >= 0 && saved < slides.length) idx = saved;
+
+  function show(i){
+    idx = Math.max(0, Math.min(slides.length - 1, i));
+    slides.forEach(function(s, k){ s.classList.toggle('is-active', k === idx); });
+    counter.textContent = (idx + 1) + ' / ' + slides.length;
+    progress.style.width = ((idx + 1) / slides.length * 100) + '%';
+    var n = slides[idx].getAttribute('data-notes');
+    notesBody.textContent = n || '(sem notas neste slide)';
+    localStorage.setItem(KEY, String(idx));
+  }
+
+  function scaleDeck(){
+    var pad = 48;
+    var s = Math.min((window.innerWidth - pad) / 1600, (window.innerHeight - pad) / 900);
+    deck.style.transform = 'translate(-50%, -50%) scale(' + s + ')';
+  }
+
+  document.addEventListener('keydown', function(e){
+    switch(e.key){
+      case 'ArrowRight': case 'PageDown': case ' ': e.preventDefault(); show(idx + 1); break;
+      case 'ArrowLeft': case 'PageUp': e.preventDefault(); show(idx - 1); break;
+      case 'Home': e.preventDefault(); show(0); break;
+      case 'End': e.preventDefault(); show(slides.length - 1); break;
+      case 'n': case 'N': notes.classList.toggle('show'); break;
+    }
+  });
+
+  window.addEventListener('resize', scaleDeck);
+  scaleDeck();
+  show(idx);
+})();
+</script>
+</body>
+</html>
