@@ -11,4 +11,9 @@ node_modules/
 # requires publishing raw results, so only dry-runs and working copies are ignored.
 bench/results/*dry-run*.jsonl
 bench/**/scratch/
+# Terminal-Bench per-trial container artifacts (asciinema casts, tmux panes,
+# install logs). `run.py --tb-output-path` defaults here. The shared JSONL and
+# the trial results.json carry every figure a claim needs; the casts are
+# megabytes of terminal replay with no analytical use.
+bench/results/.tb-runs/
 bench/**/.venv/
