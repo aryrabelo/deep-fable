@@ -393,9 +393,22 @@ different test. Q2 is answered primarily by pass rates with Wilson 95% CIs per a
 language plus cost/latency/token means (`--descriptives`), with a single confirmatory
 two-sided McNemar on `ds-jspace` vs `opus-med`.
 
-Cost, stated before authorisation: ~$2 cash for all three deepseek arms; 178 Opus and 178
-Sonnet invocations of subscription quota. Quota, not dollars, is the binding constraint, and
-it is why `runs_per_exercise` is 1 here rather than §8's 3.
+Cost, measured rather than projected (2026-08-19/20). The three deepseek arms over the
+n=113 javascript+python+rust subset cost **$4.36 cash** for 339 invocations — metered, and
+the only metered provider in the ladder.
+
+On the Anthropic arms `cost_usd` is **non-zero but notional**: `opus-med` records ~$1.64 per
+invocation, and that figure is a list-price equivalent computed by the harness, not a
+charge. The billing path was verified three ways: no `ANTHROPIC_API_KEY` in the environment,
+`omp usage` reports Anthropic as subscription buckets (`5h`, `7d`), and a 3-unit Opus probe
+moved the `5h` bucket from 1% to 3% — the spend came out of quota. Extrapolated, 113 Opus
+units consume roughly 75 points of a 5-hour window (so ~3 windows, ~13h wall time) and up to
+38 points of the weekly bucket. `kimi-max` records $0.000 and is plan-backed.
+
+So a reader reconciling the JSONL against a credit-card statement must not sum `cost_usd`
+across arms: it mixes real dollars (deepseek) with notional ones (Anthropic). Quota, not
+dollars, is the binding constraint on the Anthropic arms, and it is why `runs_per_exercise`
+is 1 here rather than §8's 3.
 
 ## 10. Q1 — the `jspace` profile does apply what it declares, and model self-reports are noise
 
@@ -490,3 +503,53 @@ was pure harness noise, and the length-control gate would have compared zero aga
 passed. §7's checklist would not have caught it. The lesson is the one from Round 3 and from Q1
 in §10, a third time: **the first real record of any sweep must be read by a human before the
 rest are paid for.**
+
+## 12. The headroom diagnostic — why the deepseek null is a real null, and why Opus/Kimi skill arms would be uninterpretable
+
+Run 2026-08-20. Nine purposive units (six `opus-med`, three `kimi-max`), both arms **plain**
+(`skill: none`), ~$0 cash and ~2 points of the Anthropic 5-hour bucket. Recorded outside
+`bench/results/` because purposive selection cannot feed a pre-registered estimate; the
+`--only` flag added for it says so in its own help text.
+
+The n=113 deepseek sweep left 26 tasks where **all three** arms failed. Two rival readings of
+that floor: broken toolchain, or difficulty beyond any model. Both are testable with a
+reference model run plain, so three floor tasks were chosen to separate them —
+`rust/acronym` (trivial; a floor here indicts the harness), `python/list-ops` (same test on an
+independent toolchain), `rust/alphametics` (genuine combinatorial search; where a reasoning
+skill should bite if it bites anywhere).
+
+| task | ds-jspace | ds-plain | ds-placebo | opus-med | kimi-max |
+|---|---|---|---|---|---|
+| `rust/acronym` | fail | fail | fail | **pass** | **pass** |
+| `python/list-ops` | fail | fail | fail | **pass** | **pass** |
+| `rust/alphametics` | fail | fail | fail | **pass** | **pass** |
+
+`opus-med` 6/6 (Wilson 95% [0.610, 1.000]), `kimi-max` 3/3 ([0.438, 1.000]). Under a true
+reference rate of 0.50 the chance of 6/6 is 0.016.
+
+Both rival readings die. The rust toolchain works, so deepseek's 16 rust floor tasks are model
+weakness and not a harness bug; and the hardest task probed is solvable plain, so the floor is
+not beyond reach. **Real headroom existed**, which is what upgrades the §-primary result from
+"no effect detected" to "no effect where an effect had room to appear": J-Space had solvable
+failures available and converted none of them (p = 0.711 two-sided, and nominally *negative*
+against `ds-plain`, 15 discordant pairs to 17).
+
+The same fact forecloses the obvious follow-up. Skill-on arms for Opus or Kimi would measure an
+intervention in a region where both models already score at ceiling on the hardest tasks this
+benchmark can identify, so a null there would be **uninterpretable** — indistinguishable from
+"nothing left to fix". Testing J-Space against strong models needs a harder benchmark where
+they sit plain somewhere near 0.4–0.6, not more units of this one.
+
+Bounded honestly: three hand-picked tasks show saturation at the top of the difficulty band
+*inferable from the deepseek data*, not across the whole benchmark.
+
+Side finding, on cost rather than inference: `kimi-max` passed all three floor tasks on a mean
+of 255,614 input tokens, against `ds-plain`'s 376,685 mean over the tasks it failed — two
+thirds of the tokens, at a measured `cost_usd` of 0.000 that is plan-backed rather than
+notional (§9). On the practical question of which cheap model to reach for, the measured
+evidence favours Kimi over deepseek on accuracy, tokens, and cash simultaneously.
+
+One operational note: 1 of 7 units (`rust/acronym` [opus-med]) tripped the §11 `tokens_in == 0`
+guard on a missing transcript and needed a re-run, so the bounded single retry in
+`invoke_omp()` does not cover every transient. The guard did its job — it refused to record an
+unusable row.

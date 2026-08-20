@@ -486,14 +486,28 @@ def invoke_omp(
         cmd += ["--append-system-prompt", str(sysprompt_file)]
     cmd.append(f"@{prompt_file}")
 
-    start = time.time()
-    try:
-        subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        pass
-    latency = time.time() - start
-
-    session_file = _find_session_file(session_dir)
+    # One bounded retry when the invocation leaves no transcript at all. That
+    # is a provider/CLI transient (observed once at hour 4 of a 339-unit
+    # sweep: empty session dir, no usage, nothing to parse), and letting a
+    # single transient abort a multi-hour paid run is worse than retrying it.
+    # Bounded at one attempt on purpose: a systematic failure must still stop
+    # the sweep rather than loop burning money.
+    # ponytail: no backoff, no jitter — one retry is one retry. Add backoff
+    # only if transients are ever observed to cluster.
+    latency = 0.0
+    session_file = None
+    for attempt in (1, 2):
+        start = time.time()
+        try:
+            subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            pass
+        latency += time.time() - start
+        session_file = _find_session_file(session_dir)
+        if session_file is not None:
+            break
+        if attempt == 1:
+            print(f"  retrying {run_dir.name}: no transcript from first attempt", flush=True)
     if session_file is None:
         return latency, 0, 0, 0.0
 
@@ -594,6 +608,10 @@ def filter_resume(
 def parse_args(argv=None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--exercises", type=int, default=0, metavar="N", help="Sample N exercises (0 = all)")
+    p.add_argument("--only", default="", metavar="ID1,ID2",
+                   help="Comma-separated task_ids (lang/name) to run, e.g. "
+                        "rust/acronym,python/list-ops. Purposive selection: use for "
+                        "diagnostics, never for a pre-registered estimate.")
     p.add_argument("--langs", default="", metavar="L1,L2",
                    help="Comma-separated language subset (cpp, go, java, javascript, python, "
                         "rust). Default: all. Restricting languages lowers n and therefore "
@@ -715,6 +733,15 @@ def main(argv=None) -> int:
     # subset can still be capped for a smoke test.
     if args.exercises > 0:
         exercises = exercises[: args.exercises]
+    if args.only:
+        wanted_ids = [t.strip() for t in args.only.split(",") if t.strip()]
+        by_id = {ex.task_id: ex for ex in exercises}
+        missing = [t for t in wanted_ids if t not in by_id]
+        if missing:
+            print(f"error: unknown task_id(s) {missing}", file=sys.stderr)
+            return 2
+        exercises = [by_id[t] for t in wanted_ids]
+        print(f"--only: {len(exercises)} exercise(s) (purposive, not a random sample).")
 
     toolchains = probe_toolchains()
     print("Toolchain availability:")

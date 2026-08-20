@@ -200,3 +200,30 @@ def test_session_dispatch_tolerates_missing_records_and_bad_lines(tmp_path):
     p = tmp_path / "t.jsonl"
     p.write_text('{"type":"session_start"}\nnot json at all\n')
     assert _session_dispatch(p) == (None, False, None)
+
+
+def test_only_selects_named_tasks_and_rejects_unknown(tmp_path):
+    """--only is purposive selection, so both halves matter: the named ids
+    must be exactly what runs, and a typo must fail loudly rather than
+    silently running a different set."""
+    import subprocess
+
+    cache = REPO_ROOT / "bench" / "aider_polyglot" / ".cache" / "polyglot-benchmark"
+    if not cache.is_dir():
+        import pytest
+        pytest.skip("polyglot-benchmark not cached; --only needs discovery")
+
+    def run(only):
+        return subprocess.run(
+            [sys.executable, "bench/aider_polyglot/run.py", "--dry-run", "--only", only,
+             "--arms", "ds-plain", "--out", str(tmp_path / "o.jsonl")],
+            cwd=REPO_ROOT, capture_output=True, text=True,
+        )
+
+    ok = run("rust/acronym,python/list-ops")
+    assert ok.returncode == 0, ok.stderr
+    assert "--only: 2 exercise(s)" in ok.stdout
+
+    bad = run("rust/acronym,python/does-not-exist")
+    assert bad.returncode == 2
+    assert "python/does-not-exist" in bad.stderr

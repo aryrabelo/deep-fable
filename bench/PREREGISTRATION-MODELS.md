@@ -32,6 +32,39 @@ on this machine. Consequences, all registered here rather than discovered later:
   for anything this plan governs** — that is what keeps this an amendment and not a post-hoc
   revision. Those four records will not be analysed and are not in the sweep's output file.
 
+**Amendment 3, 2026-08-20, after the deepseek arms completed and 12 quota records existed.**
+Two changes, and unlike Amendments 1 and 2 this one is **not** fully pre-data — it is recorded
+as an amendment made with partial data in hand, which is a weaker position and is labelled as
+such.
+
+- **`sonnet-med` is excluded by decision.** It is not a technical failure: the arm ran fine
+  (4 records). It is dropped on cost. Consequently only **two** of the three registered Q3
+  comparisons are performed: `ds-jspace` vs `opus-med` and `ds-jspace` vs `kimi-max`.
+  `ds-jspace` vs `sonnet-med` is reported as **not run**.
+- **Alpha stays 0.0167 and the margin stays 19.0pp.** Dropping a registered test and then
+  relaxing alpha to 0.025 because only two tests remain would be re-optimising the plan against
+  the data that is already in hand. The stricter alpha is retained deliberately; it costs power
+  and buys the right to report the result at all.
+- The **4 `sonnet-med` records already written are not deleted** (they are real measurements)
+  but they are excluded from every claim. n=4 against a registered n=113 supports nothing, and
+  any mention of them is labelled partial and exploratory.
+
+**Cost correction, and it contradicts what this document said.** Amendment 2 asserted the
+Anthropic and Kimi arms cost "$0 cash — subscription plans" and that a `cost_usd` of 0 on those
+arms was expected. The data says otherwise. Measured over the first 12 quota records:
+
+| arm | mean `cost_usd` per invocation | projected × 113 |
+|---|---|---|
+| `opus-med` | $1.679 | ~$190 |
+| `sonnet-med` | $0.618 | ~$70 (not incurred — arm dropped) |
+| `kimi-max` | $0.000 | $0 |
+
+Only `kimi-max` behaves like a subscription plan. Whether the Opus/Sonnet figures are real
+billing or a notional API-price calculation the subscription absorbs is **unresolved**; the
+figure is what `omp` recorded in each transcript's `cost.total`, and it is reported as such
+rather than assumed away in either direction. The earlier "$0 cash" claim was wrong and is
+withdrawn. `docs/BENCHMARKS.md` §9 carries the same withdrawal.
+
 **What the subset costs, stated plainly.** At 19pp, a positive Q3 result reads "matches within
 19 percentage points", which is close to vacuous for a coding benchmark — the interval admits
 almost any plausible difference. The defensible value of this run is **Q2 estimation**: per-arm
