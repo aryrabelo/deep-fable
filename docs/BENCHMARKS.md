@@ -659,3 +659,55 @@ satisfied on this benchmark** without overriding `perform_task` to recover usage
 container. Any claim made from terminal-bench data must state that its arms were not
 token-verified; the aider-polyglot arms remain the only token-controlled comparison in this
 repository.
+
+## 15. The long-horizon probe: floored on pass/fail, decisive on cost
+
+Run 2026-08-20. `intrusion-detection` — the sole `hard`-tier task in the curated subset,
+system-administration, multi-step, and free in its test phase — three runs per arm,
+`jspace` vs `none`, deepseek-v4-flash at `thinking: max`. Six real trials, ~2h wall time, about
+$1 of metered OpenRouter spend.
+
+| arm | n | passed | mean agent latency |
+|---|---|---|---|
+| `none` | 3 | **0** | 968s |
+| `jspace` | 3 | **0** | **1960s** |
+
+Five of the six carry `failure_mode: unset`, i.e. the agent finished and the graders failed it —
+real verdicts, not the `test_timeout`/`agent_timeout` plumbing failures of §14. The sixth is a
+`jspace` trial that hit the 2400s agent ceiling, which means the `jspace` mean is **censored from
+below**: its true value is higher than 1960s.
+
+**On pass/fail this probe is floored, not null, and it must not be reported as a null.** 0/3
+against 0/3 is the §12 failure mode recurring: when both arms fail every trial, the skill had no
+opportunity to change an outcome, so the comparison carries no information about it. The task
+selection is at fault — `intrusion-detection` was chosen for being the hardest available, which
+is precisely the wrong criterion. What the long-horizon question needs is a task inside the
+model's discrimination band, where the plain arm sometimes succeeds; finding one requires a
+screening pass over medium-tier tasks (`chess-best-move` is the obvious candidate: medium,
+reasoning-heavy, and its `run-tests.sh` installs nothing).
+
+**On cost the probe is not floored, and the result is unambiguous.** The skill took **2.02×
+longer to arrive at the same failure**, with the true ratio higher because of the censoring, and
+higher again in agent-work terms since both arms pay the same ~11min in-container install inside
+that figure. Token counts are unavailable here for the §14 upstream reason, so this is a latency
+claim only — but latency at constant outcome is a real cost, and it points the same way as the
++3.2% and +5.4% token surcharges measured under token control in §8 and §13.
+
+### What the whole investigation supports, and what it does not
+
+Supported, across four benchmarks-worth of runs on short well-specified coding tasks:
+**no measurable benefit from the J-Space addendum at any capability tier**, with a consistent
+cost every time. deepseek n=113 paired, p = 0.711 and nominally negative against plain; sonnet
+n=10 paired, zero discordant pairs; opus saturated with no headroom to test.
+
+Not supported, and it should be stated plainly rather than buried: **the domain the skill claims
+remains untested.** §15 was the attempt and it floored. Chained reasoning, planning, global
+consistency across a large deliverable — none of it has been measured, and the negative results
+above are about exercise-style coding.
+
+A mechanistic reading that fits every result and is falsifiable: the addendum is reasoning
+scaffolding delivered through the system prompt, and every arm here ran at `thinking: max`.
+These models already reason extensively by default, so the scaffold instructs them to do what
+they are already doing — redundant guidance, paid for in tokens and latency. The skill's design
+predates models with native thinking modes. That reading predicts a null in the long-horizon
+domain too, and the way to falsify it is a discrimination-band task, not a harder one.
