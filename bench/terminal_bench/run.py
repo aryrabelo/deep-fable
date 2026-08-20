@@ -121,6 +121,16 @@ def live_records(
     return records
 
 
+def make_run_id(arm: str, now: datetime) -> str:
+    """Terminal-Bench passes `--run-id` straight through to `docker compose -p`,
+    which rejects anything but lowercase alphanumerics, hyphens and underscores.
+    An ISO-style stamp carries uppercase `T`/`Z` and makes every container build
+    fail with `invalid project name` before the agent is ever invoked — a
+    plumbing failure that terminal-bench reports as `unknown_agent_error`, i.e.
+    indistinguishable from a model failure in results.json. Hence lowercase."""
+    return f"{arm}-{now.strftime('%Y%m%d-%H%M%S')}".lower()
+
+
 def run_live(
     task_ids: list[str],
     arm: str,
@@ -129,8 +139,9 @@ def run_live(
     dataset_path: Path,
     tb_output_path: Path,
     run_idx: int,
+    agent_timeout_sec: float,
 ) -> list[dict]:
-    run_id = f"{arm}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+    run_id = make_run_id(arm, datetime.now(timezone.utc))
     env = dict(os.environ)
     env["DEEP_FABLE_ARM"] = arm
     env["DEEP_FABLE_MODEL"] = model
@@ -152,6 +163,8 @@ def run_live(
         str(tb_output_path),
         "--run-id",
         run_id,
+        "--global-agent-timeout-sec",
+        str(agent_timeout_sec),
     ]
     for task_id in task_ids:
         cmd += ["-t", task_id]
@@ -166,9 +179,26 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--model", default=os.environ.get("DEEP_FABLE_MODEL", DEFAULT_MODEL))
     parser.add_argument(
+        "--agent-timeout-sec", type=float, default=2400.0,
+        help="Passed through as tb's --global-agent-timeout-sec. The default "
+             "must cover container setup, which is serial and expensive: apt-get "
+             "curl/unzip, the bun installer, then `bun install -g "
+             "@oh-my-pi/pi-coding-agent` (~600 packages) runs inside every fresh "
+             "container, ~11min observed before the agent gets its first token. "
+             "terminal-bench's default cut the install off mid-flight and "
+             "recorded `agent_timeout` with 0 tokens. "
+             "ponytail: raise the ceiling rather than cache the install; bake omp "
+             "into a base image if the setup share of wall time starts to hurt.",
+    )
+    parser.add_argument(
         "--thinking", default=os.environ.get("DEEP_FABLE_THINKING", DEFAULT_THINKING)
     )
     parser.add_argument("--run-idx", type=int, default=1)
+    parser.add_argument(
+        "--task", default="", metavar="ID1,ID2",
+        help="Comma-separated task ids to run instead of subset.txt. Purposive "
+             "selection for diagnostics and smoke tests; never a powered estimate.",
+    )
     parser.add_argument(
         "--dataset-path",
         type=Path,
@@ -187,6 +217,14 @@ def main() -> int:
     arm_prompt(args.arm)
 
     task_ids = load_subset()
+    if args.task:
+        task_ids = [t.strip() for t in args.task.split(",") if t.strip()]
+        if args.dataset_path is not None:
+            known = {p.name for p in args.dataset_path.iterdir() if p.is_dir()}
+            unknown = [t for t in task_ids if t not in known]
+            if unknown:
+                parser.error(f"unknown task id(s) {unknown} in {args.dataset_path}")
+        print(f"--task: {len(task_ids)} task(s) (purposive, not subset.txt).")
     started = datetime.now(timezone.utc)
     out_path = results_path(started)
 
@@ -205,6 +243,7 @@ def main() -> int:
             args.dataset_path,
             args.tb_output_path,
             args.run_idx,
+            args.agent_timeout_sec,
         )
 
     with out_path.open("a") as fh:

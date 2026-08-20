@@ -60,7 +60,8 @@ _OPUS_MODEL = "anthropic/claude-opus-5"
 _SONNET_MODEL = "anthropic/claude-sonnet-5"
 _KIMI_MODEL = "kimi-code/k3"
 
-ALL_ARMS = ARMS + ("ds-jspace", "ds-plain", "ds-placebo", "opus-med", "sonnet-med", "kimi-max")
+ALL_ARMS = ARMS + ("ds-jspace", "ds-plain", "ds-placebo", "opus-med", "sonnet-med",
+                   "kimi-max", "sonnet-jspace")
 
 ARM_SPECS: dict[str, ArmSpec] = {
     "jspace": ArmSpec("jspace", None, None, "jspace"),
@@ -72,6 +73,13 @@ ARM_SPECS: dict[str, ArmSpec] = {
     "opus-med": ArmSpec("opus-med", _OPUS_MODEL, "medium", "none"),
     "sonnet-med": ArmSpec("sonnet-med", _SONNET_MODEL, "medium", "none"),
     "kimi-max": ArmSpec("kimi-max", _KIMI_MODEL, "max", "none"),
+    # Diagnostic pair with sonnet-med (same model/thinking, skill on) added
+    # 2026-08-20 to ask whether the deepseek null is model-specific. Sonnet
+    # is the only reference in the middle band: opus passes the deepseek floor
+    # plain (docs/BENCHMARKS.md 12), so it has no headroom to measure.
+    # ponytail: diagnostic, outside PREREGISTRATION-MODELS.md's locked arm
+    # list; promote to a registered arm only via a new pre-registration.
+    "sonnet-jspace": ArmSpec("sonnet-jspace", _SONNET_MODEL, "medium", "jspace"),
 }
 
 

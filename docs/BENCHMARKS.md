@@ -553,3 +553,78 @@ One operational note: 1 of 7 units (`rust/acronym` [opus-med]) tripped the §11 
 guard on a missing transcript and needed a re-run, so the bounded single retry in
 `invoke_omp()` does not cover every transient. The guard did its job — it refused to record an
 unusable row.
+
+## 13. Sonnet, paired: zero discordant pairs out of ten
+
+Run 2026-08-20. `sonnet-med` (plain) vs `sonnet-jspace` (same model, same `medium` thinking,
+skill on) over the ten tasks named below — chosen because **all three deepseek arms failed every
+one of them**, which is where headroom is largest. 20 units, $0 cash, subscription quota.
+`sonnet-jspace` is a diagnostic arm outside the registered list (`bench/arms/arms.py`).
+
+| task | `sonnet-med` | `sonnet-jspace` |
+|---|---|---|
+| `javascript/ledger` | fail | fail |
+| `python/bowling`, `python/forth`, `python/paasio`, `python/react` | pass | pass |
+| `rust/doubly-linked-list`, `rust/forth`, `rust/grep`, `rust/react`, `rust/xorcism` | pass | pass |
+
+9/10 both arms. `both=9, only-jspace=0, only-plain=0, neither=1`, **discordant = 0**. With no
+discordant pairs McNemar has nothing to test, which is itself the result: the skill did not
+change a single outcome. It did change the bill — **+5.4% input tokens** (739,286 vs 701,198)
+and **+10% latency** (272s vs 247s).
+
+Note what Sonnet did in passing: it converted **9 of deepseek's 10 floor failures** while
+running plain, which is the §12 headroom finding again on a second model.
+
+Across the capability range now measured on short, well-specified coding tasks:
+
+| model | design | outcome | token cost of the skill |
+|---|---|---|---|
+| deepseek-v4-flash (weak) | n=113 paired, 3 arms | p = 0.711, nominally negative vs plain | +3.2% |
+| claude-sonnet-5 (mid) | n=10 paired | 0 discordant pairs | +5.4% |
+| claude-opus-5 (strong) | n=6 plain | passes the floor plain; no headroom to test | not run |
+
+Three models, three capability tiers, no detected benefit anywhere, and a token surcharge every
+time. The n=10 Sonnet probe is not powered for a verdict and is not claimed as one — but a zero
+discordant-pair count is a weak result in only one direction. It cannot hide a large effect.
+
+## 14. The long-horizon question is the one still open — and the instrument is now one credential away
+
+Everything in §8–§13 lives on aider-polyglot: short, single-file, fully-specified exercises with
+a test suite handed over. The J-Space skill claims a different domain — chained reasoning,
+planning, long-horizon agentic work, complex debugging, global consistency across a large
+deliverable. **None of that has been tested.** The null results above are real, and they are
+real about exercise-style coding, which is arguably not where the skill claims to work.
+
+`bench/terminal_bench/` is the right instrument (80 real multi-step container tasks, 12 easy /
+44 medium / 24 hard, 9 categories) and had never been run for real. Bringing it up on
+2026-08-20 surfaced two more silent failures, both now fixed:
+
+**4. Every container build failed on an invalid docker project name.** `run_live()` built its
+`--run-id` as `f"{arm}-%Y%m%dT%H%M%SZ"`. Terminal-Bench passes `--run-id` straight to
+`docker compose -p`, which accepts only lowercase alphanumerics, hyphens and underscores — the
+ISO stamp's `T` and `Z` are fatal. Every build died before the agent existed, and
+terminal-bench recorded `unknown_agent_error`, which in `results.json` is indistinguishable
+from the model failing the task. Fixed in `make_run_id()`, with the constraint locked by
+`tests/test_terminal_bench_run_id.py` rather than left to a comment.
+
+**5. The agent timeout could not cover container setup.** Each fresh container runs `apt-get`
+for curl/unzip, the bun installer, then `bun install -g @oh-my-pi/pi-coding-agent` — ~600
+packages, 167s for the bun step alone, ~11 min before the model sees its first token. The
+default timeout cut the install off mid-flight (observed at package 594/603) and recorded
+`agent_timeout` with `total_input_tokens: 0`. Now `--agent-timeout-sec` (default 2400s) is
+passed through as `--global-agent-timeout-sec`.
+
+With both fixed the pipeline reaches the model: `omp/17.4.0` installs in-container, receives its
+`--append-system-prompt` addendum, and issues the request. It then gets **`401 User not
+found.`** from OpenRouter.
+
+That is not a harness bug. The `OPENROUTER_API_KEY` in the environment is dead — verified
+directly against `https://openrouter.ai/api/v1/key`, HTTP 401 — and the project's own secret
+registry already documents it as such (`openrouter-api-key`: *"a atual responde 401 'User not
+found' — rotacionar"*). The aider sweeps were unaffected because local `omp` authenticates
+through its own broker on this machine; a fresh container has only the env var.
+
+`openrouter/deepseek/deepseek-v4-flash-0731` is reachable only through OpenRouter here, so the
+long-horizon deepseek question is blocked on **rotating one key**, not on money, Docker, disk
+(321 GiB free), or code. Everything else is staged: colima up, `terminal-bench-core==0.1.1`
+downloaded (80 tasks), adapter fixed, `--task` added for purposive single-task probes.

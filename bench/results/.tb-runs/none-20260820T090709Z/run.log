@@ -1,0 +1,45 @@
+Processing tasks in duration order (longest first):
++-----+-------------+------------+------------+
+|   # | Task Name   | Duration   | Source     |
++=====+=============+============+============+
+|   1 | hello-world | 3m 30s     | calculated |
++-----+-------------+------------+------------+
+Total tasks: 1
+Starting harness run
+Run ID: none-20260820T090709Z
+Running task: hello-world
+Running docker compose command: docker compose -p hello-world-1-of-1-none-20260820T090709Z -f /Users/aryrabelo/.cache/terminal-bench-core-0.1.1/hello-world/docker-compose.yaml build
+Docker compose command failed with exit code 1
+Command: docker compose -p hello-world-1-of-1-none-20260820T090709Z -f /Users/aryrabelo/.cache/terminal-bench-core-0.1.1/hello-world/docker-compose.yaml build
+STDERR: invalid project name "hello-world-1-of-1-none-20260820T090709Z": must consist only of lowercase alphanumeric characters, hyphens, and underscores as well as start with a letter or number
+
+Running docker compose command: docker compose -p hello-world-1-of-1-none-20260820T090709Z -f /Users/aryrabelo/.cache/terminal-bench-core-0.1.1/hello-world/docker-compose.yaml down
+Docker compose command failed with exit code 1
+Command: docker compose -p hello-world-1-of-1-none-20260820T090709Z -f /Users/aryrabelo/.cache/terminal-bench-core-0.1.1/hello-world/docker-compose.yaml down
+STDERR: invalid project name "hello-world-1-of-1-none-20260820T090709Z": must consist only of lowercase alphanumeric characters, hyphens, and underscores as well as start with a letter or number
+
+Error cleaning up docker compose services: Command '['docker', 'compose', '-p', 'hello-world-1-of-1-none-20260820T090709Z', '-f', '/Users/aryrabelo/.cache/terminal-bench-core-0.1.1/hello-world/docker-compose.yaml', 'down']' returned non-zero exit status 1.
+Harness execution failed for /Users/aryrabelo/.cache/terminal-bench-core-0.1.1/hello-world: Command '['docker', 'compose', '-p', 'hello-world-1-of-1-none-20260820T090709Z', '-f', '/Users/aryrabelo/.cache/terminal-bench-core-0.1.1/hello-world/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Traceback (most recent call last):
+  File "/Users/aryrabelo/.cache/uv/archive-v0/WejvsVCQ3Wk6MdFC/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 1011, in _execute_single_trial
+    trial_results = self._run_trial(trial_handler)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/aryrabelo/.cache/uv/archive-v0/WejvsVCQ3Wk6MdFC/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 717, in _run_trial
+    with spin_up_terminal(
+         ^^^^^^^^^^^^^^^^^
+  File "/Users/aryrabelo/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/Users/aryrabelo/.cache/uv/archive-v0/WejvsVCQ3Wk6MdFC/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 176, in spin_up_terminal
+    terminal.start()
+  File "/Users/aryrabelo/.cache/uv/archive-v0/WejvsVCQ3Wk6MdFC/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 102, in start
+    self.container = self._compose_manager.start()
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/aryrabelo/.cache/uv/archive-v0/WejvsVCQ3Wk6MdFC/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 126, in start
+    self._run_docker_compose_command(["build"])
+  File "/Users/aryrabelo/.cache/uv/archive-v0/WejvsVCQ3Wk6MdFC/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 101, in _run_docker_compose_command
+    result = subprocess.run(
+             ^^^^^^^^^^^^^^^
+  File "/Users/aryrabelo/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['docker', 'compose', '-p', 'hello-world-1-of-1-none-20260820T090709Z', '-f', '/Users/aryrabelo/.cache/terminal-bench-core-0.1.1/hello-world/docker-compose.yaml', 'build']' returned non-zero exit status 1.

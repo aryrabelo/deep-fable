@@ -93,9 +93,13 @@ def test_arms_tuple_is_exactly_the_contract():
 
 
 def test_all_arms_exact_contents():
+    """Exact-contents lock. `sonnet-jspace` is a *diagnostic* arm (2026-08-20),
+    deliberately outside PREREGISTRATION-MODELS.md's registered list — it may
+    not be used for a pre-registered estimate without a new pre-registration."""
     assert ALL_ARMS == (
         "jspace", "none", "placebo",
         "ds-jspace", "ds-plain", "ds-placebo", "opus-med", "sonnet-med", "kimi-max",
+        "sonnet-jspace",
     )
 
 
@@ -114,6 +118,7 @@ def test_arm_specs_match_the_resume_table():
         "opus-med": (opus, "medium", "none"),
         "sonnet-med": (sonnet, "medium", "none"),
         "kimi-max": (kimi, "max", "none"),
+        "sonnet-jspace": (sonnet, "medium", "jspace"),
     }
     assert set(ARM_SPECS) == set(ALL_ARMS)
     for name, (model, thinking, skill) in expected.items():
